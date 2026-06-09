@@ -8,6 +8,8 @@ type BusinessPageProps = {
   }>
 }
 
+type CategoryRelation = { name: string } | { name: string }[] | null
+
 type Business = {
   id: string
   business_name: string
@@ -26,14 +28,7 @@ type Business = {
   logo_url: string | null
   cover_image_url: string | null
   is_featured: boolean
-categories:
-  | {
-      name: string
-    }
-  | {
-      name: string
-    }[]
-  | null
+  categories: CategoryRelation
 }
 
 type Review = {
@@ -44,10 +39,18 @@ type Review = {
   created_at: string
 }
 
+function getCategoryName(categories: CategoryRelation) {
+  if (!categories) return 'Local business'
+  if (Array.isArray(categories)) {
+    return categories[0]?.name ?? 'Local business'
+  }
+  return categories.name
+}
+
 export default async function BusinessPage({ params }: BusinessPageProps) {
   const { slug } = await params
 
-  const { data: business } = await supabase
+  const { data: businessData } = await supabase
     .from('businesses')
     .select(`
       id,
@@ -75,23 +78,25 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
     .eq('is_approved', true)
     .single()
 
-  if (!business) {
+  if (!businessData) {
     notFound()
   }
 
-  const { data: reviews } = await supabase
+  const business = businessData as Business
+
+  const { data: reviewData } = await supabase
     .from('reviews')
     .select('id, reviewer_name, rating, review_text, created_at')
     .eq('business_id', business.id)
     .eq('is_approved', true)
     .order('created_at', { ascending: false })
 
-  const approvedReviews = (reviews as Review[] | null) ?? []
+  const reviews = (reviewData as Review[] | null) ?? []
 
   const averageRating =
-    approvedReviews.length > 0
-      ? approvedReviews.reduce((total, review) => total + review.rating, 0) /
-        approvedReviews.length
+    reviews.length > 0
+      ? reviews.reduce((total, review) => total + review.rating, 0) /
+        reviews.length
       : null
 
   return (
@@ -104,12 +109,12 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
           <div className="mt-8 rounded-3xl bg-white/10 p-6">
             <p className="text-sm font-semibold uppercase tracking-wide text-amber-300">
-              {Array.isArray(business.categories)
-  ? business.categories[0]?.name ?? 'Local business'
-  : business.categories?.name ?? 'Local business'}
+              {getCategoryName(business.categories)}
             </p>
 
-            <h1 className="mt-3 text-4xl font-bold">{business.business_name}</h1>
+            <h1 className="mt-3 text-4xl font-bold">
+              {business.business_name}
+            </h1>
 
             {business.is_featured && (
               <span className="mt-4 inline-block rounded-full bg-amber-300 px-3 py-1 text-sm font-semibold text-stone-950">
@@ -117,10 +122,10 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               </span>
             )}
 
-            {averageRating && (
+            {averageRating !== null && (
               <p className="mt-4 text-stone-100">
-                ⭐ {averageRating.toFixed(1)} from {approvedReviews.length}{' '}
-                review{approvedReviews.length === 1 ? '' : 's'}
+                ⭐ {averageRating.toFixed(1)} from {reviews.length} review
+                {reviews.length === 1 ? '' : 's'}
               </p>
             )}
           </div>
@@ -149,6 +154,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xl font-bold">Reviews</h2>
+
                 <Link
                   href={`/business/${slug}/review`}
                   className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
@@ -158,17 +164,21 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               </div>
 
               <div className="mt-5 space-y-4">
-                {approvedReviews.length ? (
-                  approvedReviews.map((review) => (
+                {reviews.length ? (
+                  reviews.map((review) => (
                     <div
                       key={review.id}
                       className="rounded-xl border border-stone-200 p-4"
                     >
                       <p className="font-semibold">{review.reviewer_name}</p>
+
                       <p className="mt-1 text-sm text-amber-600">
                         {'⭐'.repeat(review.rating)}
                       </p>
-                      <p className="mt-3 text-stone-700">{review.review_text}</p>
+
+                      <p className="mt-3 text-stone-700">
+                        {review.review_text}
+                      </p>
                     </div>
                   ))
                 ) : (
