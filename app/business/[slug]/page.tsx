@@ -26,9 +26,14 @@ type Business = {
   logo_url: string | null
   cover_image_url: string | null
   is_featured: boolean
-  categories: {
-    name: string
-  } | null
+categories:
+  | {
+      name: string
+    }
+  | {
+      name: string
+    }[]
+  | null
 }
 
 type Review = {
@@ -99,7 +104,9 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
           <div className="mt-8 rounded-3xl bg-white/10 p-6">
             <p className="text-sm font-semibold uppercase tracking-wide text-amber-300">
-              {business.categories?.name ?? 'Local business'}
+              {Array.isArray(business.categories)
+  ? business.categories[0]?.name ?? 'Local business'
+  : business.categories?.name ?? 'Local business'}
             </p>
 
             <h1 className="mt-3 text-4xl font-bold">{business.business_name}</h1>
