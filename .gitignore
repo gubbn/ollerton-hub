@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+.next
+.env.local
+.vercel
 /.pnp
 .pnp.*
 .yarn/*
@@ -9,6 +12,9 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+
+
+
 
 # testing
 /coverage
