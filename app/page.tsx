@@ -8,6 +8,8 @@ type Category = {
   description: string | null
 }
 
+type CategoryRelation = { name: string } | { name: string }[] | null
+
 type Business = {
   id: string
   business_name: string
@@ -15,18 +17,22 @@ type Business = {
   description: string | null
   town: string | null
   is_featured: boolean
-  categories: {
-    name: string
-  } | null
+  categories: CategoryRelation
+}
+
+function getCategoryName(categories: CategoryRelation) {
+  if (!categories) return 'Local business'
+  if (Array.isArray(categories)) return categories[0]?.name ?? 'Local business'
+  return categories.name
 }
 
 export default async function HomePage() {
-  const { data: categories } = await supabase
+  const { data: categoryData } = await supabase
     .from('categories')
     .select('id, name, slug, description')
     .order('name')
 
-  const { data: businesses } = await supabase
+  const { data: businessData } = await supabase
     .from('businesses')
     .select(`
       id,
@@ -44,11 +50,14 @@ export default async function HomePage() {
     .order('created_at', { ascending: false })
     .limit(6)
 
+  const categories = (categoryData as Category[] | null) ?? []
+  const businesses = (businessData as Business[] | null) ?? []
+
   return (
-    <main className="min-h-screen bg-stone-50 text-stone-900">
+    <main className="min-h-screen bg-stone-100 text-stone-900">
       <section className="bg-stone-900 px-6 py-16 text-white">
         <div className="mx-auto max-w-6xl">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-amber-300">
+          <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-red-300">
             Ollerton Local Business Directory
           </p>
 
@@ -63,7 +72,7 @@ export default async function HomePage() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/directory"
-              className="rounded-xl bg-amber-400 px-6 py-3 text-center font-semibold text-stone-950 hover:bg-amber-300"
+              className="rounded-xl bg-red-700 px-6 py-3 text-center font-semibold text-white hover:bg-red-800"
             >
               Browse businesses
             </Link>
@@ -80,18 +89,18 @@ export default async function HomePage() {
 
       <section className="px-6 py-10">
         <div className="mx-auto max-w-6xl">
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
-            <label className="mb-2 block text-sm font-medium text-stone-700">
+          <div className="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-stone-200">
+            <label className="mb-2 block text-sm font-semibold text-stone-700">
               Search local businesses
             </label>
 
             <input
               type="text"
               placeholder="Search by name, service or category..."
-              className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none focus:border-stone-900"
+              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
             />
 
-            <p className="mt-2 text-sm text-stone-500">
+            <p className="mt-2 text-sm text-stone-600">
               Search will be connected in the next step.
             </p>
           </div>
@@ -100,18 +109,23 @@ export default async function HomePage() {
 
       <section className="px-6 py-8">
         <div className="mx-auto max-w-6xl">
-          <h2 className="text-2xl font-bold">Browse by category</h2>
+          <h2 className="text-2xl font-bold text-stone-900">
+            Browse by category
+          </h2>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(categories as Category[] | null)?.map((category) => (
+            {categories.map((category) => (
               <Link
                 key={category.id}
                 href={`/directory?category=${category.slug}`}
-                className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200 hover:shadow-md"
+                className="rounded-3xl bg-white p-5 shadow-lg ring-1 ring-stone-200 transition hover:shadow-xl"
               >
-                <h3 className="font-semibold">{category.name}</h3>
+                <h3 className="font-semibold text-stone-900">
+                  {category.name}
+                </h3>
+
                 <p className="mt-2 line-clamp-2 text-sm text-stone-600">
-                  {category.description}
+                  {category.description ?? 'Browse local businesses.'}
                 </p>
               </Link>
             ))}
@@ -119,10 +133,12 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="px-6 py-8">
+      <section className="px-6 py-8 pb-16">
         <div className="mx-auto max-w-6xl">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-2xl font-bold">Featured local businesses</h2>
+            <h2 className="text-2xl font-bold text-stone-900">
+              Featured local businesses
+            </h2>
 
             <Link href="/directory" className="text-sm font-semibold underline">
               View all
@@ -130,16 +146,16 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {(businesses as Business[] | null)?.length ? (
-              (businesses as Business[]).map((business) => (
+            {businesses.length > 0 ? (
+              businesses.map((business) => (
                 <Link
                   key={business.id}
                   href={`/business/${business.slug}`}
-                  className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200 hover:shadow-md"
+                  className="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-stone-200 transition hover:shadow-xl"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm text-stone-500">
-                      {business.categories?.name ?? 'Local business'}
+                    <p className="text-sm font-semibold text-stone-500">
+                      {getCategoryName(business.categories)}
                     </p>
 
                     {business.is_featured && (
@@ -149,7 +165,9 @@ export default async function HomePage() {
                     )}
                   </div>
 
-                  <h3 className="text-lg font-bold">{business.business_name}</h3>
+                  <h3 className="text-lg font-bold text-stone-900">
+                    {business.business_name}
+                  </h3>
 
                   <p className="mt-2 line-clamp-3 text-sm text-stone-600">
                     {business.description ?? 'No description added yet.'}
@@ -161,7 +179,7 @@ export default async function HomePage() {
                 </Link>
               ))
             ) : (
-              <div className="rounded-2xl bg-white p-6 text-stone-600 shadow-sm ring-1 ring-stone-200 md:col-span-3">
+              <div className="rounded-3xl bg-white p-6 text-stone-600 shadow-lg ring-1 ring-stone-200 md:col-span-3">
                 No approved businesses yet. Once listings are approved, they’ll appear here.
               </div>
             )}
