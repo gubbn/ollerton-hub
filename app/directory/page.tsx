@@ -1,6 +1,11 @@
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 
+type CategoryRelation =
+  | { name: string }
+  | { name: string }[]
+  | null
+
 type Business = {
   id: string
   business_name: string
@@ -9,13 +14,21 @@ type Business = {
   town: string | null
   service_area: string | null
   is_featured: boolean
-  categories: {
-    name: string
-  } | null
+  categories: CategoryRelation
+}
+
+function getCategoryName(categories: CategoryRelation) {
+  if (!categories) return 'Local business'
+
+  if (Array.isArray(categories)) {
+    return categories[0]?.name ?? 'Local business'
+  }
+
+  return categories.name
 }
 
 export default async function DirectoryPage() {
-  const { data: businesses, error } = await supabase
+  const { data, error } = await supabase
     .from('businesses')
     .select(`
       id,
@@ -33,55 +46,66 @@ export default async function DirectoryPage() {
     .order('is_featured', { ascending: false })
     .order('business_name')
 
+  const businesses = (data as Business[] | null) ?? []
+
   if (error) {
     return (
-      <main className="min-h-screen bg-stone-50 p-6">
-        <div className="mx-auto max-w-5xl rounded-xl bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-bold">Directory</h1>
-          <p className="mt-4 text-red-600">Could not load businesses.</p>
-          <p className="mt-2 text-sm text-stone-500">{error.message}</p>
+      <main className="min-h-screen bg-stone-100 px-6 py-12">
+        <div className="mx-auto max-w-5xl rounded-3xl bg-white p-8 shadow-lg">
+          <h1 className="text-3xl font-bold">Directory</h1>
+          <p className="mt-4 text-red-700">
+            Failed to load businesses.
+          </p>
+          <p className="mt-2 text-sm text-stone-600">
+            {error.message}
+          </p>
         </div>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-stone-50 text-stone-900">
+    <main className="min-h-screen bg-stone-100 text-stone-900">
       <section className="bg-stone-900 px-6 py-12 text-white">
         <div className="mx-auto max-w-6xl">
-          <Link href="/" className="text-sm text-amber-300 underline">
-            Back home
+          <Link
+            href="/"
+            className="text-sm font-semibold text-amber-300 underline"
+          >
+            ← Home
           </Link>
 
-          <h1 className="mt-6 text-4xl font-bold">Local business directory</h1>
+          <h1 className="mt-6 text-5xl font-bold">
+            Local Business Directory
+          </h1>
 
-          <p className="mt-3 max-w-2xl text-stone-200">
-            Browse approved local businesses in and around Ollerton.
+          <p className="mt-4 max-w-2xl text-lg text-stone-300">
+            Discover trusted businesses in Ollerton and surrounding areas.
           </p>
         </div>
       </section>
 
       <section className="px-6 py-10">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
+          <div className="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-stone-200">
             <input
               type="text"
-              placeholder="Search will be connected soon..."
-              className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none focus:border-stone-900"
+              placeholder="Search coming soon..."
+              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {(businesses as Business[] | null)?.length ? (
-              (businesses as Business[]).map((business) => (
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {businesses.length > 0 ? (
+              businesses.map((business) => (
                 <Link
                   key={business.id}
                   href={`/business/${business.slug}`}
-                  className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200 hover:shadow-md"
+                  className="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-stone-200 transition hover:shadow-xl"
                 >
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm text-stone-500">
-                      {business.categories?.name ?? 'Local business'}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-stone-500">
+                      {getCategoryName(business.categories)}
                     </p>
 
                     {business.is_featured && (
@@ -91,20 +115,30 @@ export default async function DirectoryPage() {
                     )}
                   </div>
 
-                  <h2 className="text-lg font-bold">{business.business_name}</h2>
+                  <h2 className="mt-3 text-xl font-bold">
+                    {business.business_name}
+                  </h2>
 
-                  <p className="mt-2 line-clamp-3 text-sm text-stone-600">
-                    {business.description ?? 'No description added yet.'}
+                  <p className="mt-3 line-clamp-3 text-sm text-stone-600">
+                    {business.description ?? 'No description available.'}
                   </p>
 
-                  <p className="mt-4 text-sm font-medium text-stone-700">
-                    {business.service_area || business.town || 'Ollerton'}
-                  </p>
+                  <div className="mt-4 text-sm font-medium text-stone-700">
+                    {business.service_area ||
+                      business.town ||
+                      'Ollerton'}
+                  </div>
                 </Link>
               ))
             ) : (
-              <div className="rounded-2xl bg-white p-6 text-stone-600 shadow-sm ring-1 ring-stone-200 md:col-span-3">
-                No approved businesses yet.
+              <div className="col-span-full rounded-3xl bg-white p-8 shadow-lg ring-1 ring-stone-200">
+                <h2 className="text-xl font-bold">
+                  No businesses yet
+                </h2>
+
+                <p className="mt-2 text-stone-600">
+                  Businesses will appear here once approved.
+                </p>
               </div>
             )}
           </div>
