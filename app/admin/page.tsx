@@ -16,6 +16,17 @@ type Business = {
   created_at: string
 }
 
+type ReviewBusiness =
+  | {
+      business_name: string
+      slug: string
+    }
+  | {
+      business_name: string
+      slug: string
+    }[]
+  | null
+
 type Review = {
   id: string
   business_id: string
@@ -24,10 +35,13 @@ type Review = {
   review_text: string
   is_approved: boolean
   created_at: string
-  businesses: {
-    business_name: string
-    slug: string
-  } | null
+  businesses: ReviewBusiness
+}
+
+function getReviewBusiness(businesses: ReviewBusiness) {
+  if (!businesses) return null
+  if (Array.isArray(businesses)) return businesses[0] ?? null
+  return businesses
 }
 
 export default function AdminPage() {
@@ -103,7 +117,7 @@ export default function AdminPage() {
       return
     }
 
-    setReviews((data as Review[]) ?? [])
+    setReviews((data as unknown as Review[]) ?? [])
   }
 
   async function updateBusiness(
@@ -254,62 +268,66 @@ export default function AdminPage() {
 
           <div className="mt-6 space-y-4">
             {reviews.length ? (
-              reviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="rounded-2xl border border-stone-200 p-5"
-                >
-                  <div className="flex flex-col justify-between gap-4 md:flex-row">
-                    <div>
-                      <p className="text-sm font-semibold text-stone-500">
-                        {review.businesses?.business_name ?? 'Unknown business'}
-                      </p>
+              reviews.map((review) => {
+                const reviewBusiness = getReviewBusiness(review.businesses)
 
-                      <h3 className="mt-1 text-lg font-bold">
-                        {review.reviewer_name}
-                      </h3>
+                return (
+                  <div
+                    key={review.id}
+                    className="rounded-2xl border border-stone-200 p-5"
+                  >
+                    <div className="flex flex-col justify-between gap-4 md:flex-row">
+                      <div>
+                        <p className="text-sm font-semibold text-stone-500">
+                          {reviewBusiness?.business_name ?? 'Unknown business'}
+                        </p>
 
-                      <p className="mt-1 text-sm text-amber-600">
-                        {'⭐'.repeat(review.rating)}
-                      </p>
+                        <h3 className="mt-1 text-lg font-bold">
+                          {review.reviewer_name}
+                        </h3>
 
-                      <p className="mt-3 text-sm text-stone-700">
-                        {review.review_text}
-                      </p>
+                        <p className="mt-1 text-sm text-amber-600">
+                          {'⭐'.repeat(review.rating)}
+                        </p>
 
-                      <span
-                        className={
-                          review.is_approved
-                            ? 'mt-3 inline-block rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800'
-                            : 'mt-3 inline-block rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800'
-                        }
-                      >
-                        {review.is_approved ? 'Approved' : 'Pending'}
-                      </span>
-                    </div>
+                        <p className="mt-3 text-sm text-stone-700">
+                          {review.review_text}
+                        </p>
 
-                    <div className="flex shrink-0 flex-wrap gap-3">
-                      <button
-                        onClick={() =>
-                          updateReview(review.id, !review.is_approved)
-                        }
-                        className="rounded-xl bg-stone-900 px-4 py-2 font-semibold text-white hover:bg-stone-700"
-                      >
-                        {review.is_approved ? 'Unapprove' : 'Approve'}
-                      </button>
-
-                      {review.businesses?.slug && (
-                        <Link
-                          href={`/business/${review.businesses.slug}`}
-                          className="rounded-xl border border-stone-300 px-4 py-2 font-semibold hover:bg-stone-100"
+                        <span
+                          className={
+                            review.is_approved
+                              ? 'mt-3 inline-block rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800'
+                              : 'mt-3 inline-block rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800'
+                          }
                         >
-                          View business
-                        </Link>
-                      )}
+                          {review.is_approved ? 'Approved' : 'Pending'}
+                        </span>
+                      </div>
+
+                      <div className="flex shrink-0 flex-wrap gap-3">
+                        <button
+                          onClick={() =>
+                            updateReview(review.id, !review.is_approved)
+                          }
+                          className="rounded-xl bg-stone-900 px-4 py-2 font-semibold text-white hover:bg-stone-700"
+                        >
+                          {review.is_approved ? 'Unapprove' : 'Approve'}
+                        </button>
+
+                        {reviewBusiness?.slug && (
+                          <Link
+                            href={`/business/${reviewBusiness.slug}`}
+                            className="rounded-xl border border-stone-300 px-4 py-2 font-semibold hover:bg-stone-100"
+                          >
+                            View business
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             ) : (
               <p className="text-stone-700">No reviews submitted yet.</p>
             )}
