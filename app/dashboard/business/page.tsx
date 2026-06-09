@@ -25,6 +25,7 @@ type Business = {
   town: string | null
   postcode: string | null
   service_area: string | null
+  logo_url: string | null
 }
 
 function makeSlug(value: string) {
@@ -55,9 +56,11 @@ export default function BusinessDashboardPage() {
   const [town, setTown] = useState('Ollerton')
   const [postcode, setPostcode] = useState('')
   const [serviceArea, setServiceArea] = useState('')
+  const [logoUrl, setLogoUrl] = useState('')
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -94,7 +97,8 @@ export default function BusinessDashboardPage() {
           instagram,
           town,
           postcode,
-          service_area
+          service_area,
+          logo_url
         `)
         .eq('owner_id', userData.user.id)
         .maybeSingle()
@@ -115,6 +119,7 @@ export default function BusinessDashboardPage() {
         setTown(business.town ?? 'Ollerton')
         setPostcode(business.postcode ?? '')
         setServiceArea(business.service_area ?? '')
+        setLogoUrl(business.logo_url ?? '')
       }
 
       setLoading(false)
@@ -122,6 +127,38 @@ export default function BusinessDashboardPage() {
 
     loadPage()
   }, [router])
+
+  async function handleLogoUpload(file: File) {
+    if (!userId) return
+
+    setUploadingLogo(true)
+    setMessage('')
+
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${userId}-${Date.now()}.${fileExt}`
+    const filePath = `logos/${fileName}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('business-logos')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      })
+
+    if (uploadError) {
+      setMessage(uploadError.message)
+      setUploadingLogo(false)
+      return
+    }
+
+    const { data } = supabase.storage
+      .from('business-logos')
+      .getPublicUrl(filePath)
+
+    setLogoUrl(data.publicUrl)
+    setUploadingLogo(false)
+    setMessage('Logo uploaded. Remember to save the business listing.')
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -148,6 +185,7 @@ export default function BusinessDashboardPage() {
       town,
       postcode,
       service_area: serviceArea,
+      logo_url: logoUrl || null,
       is_approved: false,
       updated_at: new Date().toISOString(),
     }
@@ -156,15 +194,13 @@ export default function BusinessDashboardPage() {
       ? await supabase.from('businesses').update(payload).eq('id', businessId)
       : await supabase.from('businesses').insert(payload)
 
-    if (error) {
-      setMessage(error.message)
-    } else {
-      setMessage(
-        businessId
+    setMessage(
+      error
+        ? error.message
+        : businessId
           ? 'Business listing updated. It may need approval before public changes show.'
           : 'Business listing created. It will appear publicly after approval.'
-      )
-    }
+    )
 
     setSaving(false)
   }
@@ -172,7 +208,7 @@ export default function BusinessDashboardPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-stone-100 px-6 py-12 text-stone-900">
-        <div className="mx-auto max-w-4xl">Loading...</div>
+        Loading...
       </main>
     )
   }
@@ -180,31 +216,52 @@ export default function BusinessDashboardPage() {
   return (
     <main className="min-h-screen bg-stone-100 px-6 py-12 text-stone-900">
       <div className="mx-auto max-w-4xl">
-        <Link
-          href="/dashboard"
-          className="font-semibold text-stone-900 underline"
-        >
+        <Link href="/dashboard" className="font-semibold underline">
           Back to dashboard
         </Link>
 
         <div className="mt-6 rounded-3xl bg-white p-8 shadow-lg ring-1 ring-stone-200">
-          <h1 className="text-3xl font-bold text-stone-900">
+          <h1 className="text-3xl font-bold">
             {businessId ? 'Edit business listing' : 'Create business listing'}
           </h1>
 
-          <p className="mt-2 text-stone-700">
-            Add the details customers need to find, trust and contact your
-            business.
-          </p>
-
           <form onSubmit={handleSave} className="mt-8 space-y-6">
+            <div>
+              <label className="mb-2 block font-semibold">Business logo</label>
+
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Business logo preview"
+                  className="mb-4 h-24 w-24 rounded-2xl object-cover ring-1 ring-stone-200"
+                />
+              ) : (
+                <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-2xl bg-stone-100 text-sm text-stone-500 ring-1 ring-stone-200">
+                  No logo
+                </div>
+              )}
+
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleLogoUpload(file)
+                }}
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+              />
+
+              {uploadingLogo && (
+                <p className="mt-2 text-sm text-stone-600">Uploading logo...</p>
+              )}
+            </div>
+
             <div>
               <label className="mb-2 block font-semibold">Business name</label>
               <input
                 className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="e.g. Fixing IT"
                 required
               />
             </div>
@@ -226,14 +283,11 @@ export default function BusinessDashboardPage() {
             </div>
 
             <div>
-              <label className="mb-2 block font-semibold">
-                Business description
-              </label>
+              <label className="mb-2 block font-semibold">Business description</label>
               <textarea
                 className="min-h-32 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tell customers what you do, who you help and why they should choose you."
               />
             </div>
 
@@ -243,95 +297,71 @@ export default function BusinessDashboardPage() {
                 className="min-h-28 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
                 value={services}
                 onChange={(e) => setServices(e.target.value)}
-                placeholder="List your main services, one per line if helpful."
               />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block font-semibold">Phone</label>
-                <input
-                  className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Phone number"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block font-semibold">Email</label>
-                <input
-                  className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Business email"
-                  type="email"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block font-semibold">Website</label>
               <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://example.co.uk"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone"
               />
-            </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block font-semibold">Facebook</label>
-                <input
-                  className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-                  value={facebook}
-                  onChange={(e) => setFacebook(e.target.value)}
-                  placeholder="Facebook page URL"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block font-semibold">Instagram</label>
-                <input
-                  className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-900 focus:border-stone-900 focus:outline-none"
-                  value={instagram}
-                  onChange={(e) => setInstagram(e.target.value)}
-                  placeholder="Instagram profile URL"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block font-semibold">Town</label>
-                <input
-                  className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-                  value={town}
-                  onChange={(e) => setTown(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block font-semibold">Postcode</label>
-                <input
-                  className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-                  value={postcode}
-                  onChange={(e) => setPostcode(e.target.value)}
-                  placeholder="NG22..."
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block font-semibold">Service area</label>
               <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-                value={serviceArea}
-                onChange={(e) => setServiceArea(e.target.value)}
-                placeholder="e.g. Ollerton, Boughton, Edwinstowe and surrounding villages"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                type="email"
               />
             </div>
+
+            <input
+              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              placeholder="Website"
+            />
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <input
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+                value={facebook}
+                onChange={(e) => setFacebook(e.target.value)}
+                placeholder="Facebook"
+              />
+
+              <input
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+                value={instagram}
+                onChange={(e) => setInstagram(e.target.value)}
+                placeholder="Instagram"
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <input
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                value={town}
+                onChange={(e) => setTown(e.target.value)}
+                placeholder="Town"
+              />
+
+              <input
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                value={postcode}
+                onChange={(e) => setPostcode(e.target.value)}
+                placeholder="Postcode"
+              />
+            </div>
+
+            <input
+              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+              value={serviceArea}
+              onChange={(e) => setServiceArea(e.target.value)}
+              placeholder="Service area"
+            />
 
             <button
               disabled={saving}
