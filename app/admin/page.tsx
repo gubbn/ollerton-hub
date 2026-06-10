@@ -158,6 +158,17 @@ export default function AdminPage() {
     Add, edit and remove directory categories.
   </p>
 </Link>
+<Link
+  href="/admin/settings"
+  className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
+>
+  <h2 className="text-xl font-semibold text-gray-900">
+    Site Settings
+  </h2>
+  <p className="mt-2 text-sm text-gray-600">
+    Edit global wording and approval settings.
+  </p>
+</Link>
         </div>
       </section>
     </main>
