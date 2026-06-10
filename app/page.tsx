@@ -16,6 +16,7 @@ type Business = {
   slug: string
   description: string | null
   town: string | null
+  logo_url: string | null
   is_featured: boolean
   categories: CategoryRelation
 }
@@ -40,6 +41,7 @@ export default async function HomePage() {
       slug,
       description,
       town,
+      logo_url,
       is_featured,
       categories (
         name
@@ -101,7 +103,7 @@ export default async function HomePage() {
             />
 
             <p className="mt-2 text-sm text-stone-600">
-              Search will be connected in the next step.
+              Search is available on the directory page.
             </p>
           </div>
         </div>
@@ -153,21 +155,35 @@ export default async function HomePage() {
                   href={`/business/${business.slug}`}
                   className="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-stone-200 transition hover:shadow-xl"
                 >
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-stone-500">
-                      {getCategoryName(business.categories)}
-                    </p>
-
-                    {business.is_featured && (
-                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                        Featured
-                      </span>
+                  <div className="mb-4 flex items-center gap-4">
+                    {business.logo_url ? (
+                      <img
+                        src={business.logo_url}
+                        alt={`${business.business_name} logo`}
+                        className="h-16 w-16 rounded-2xl object-cover ring-1 ring-stone-200"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-100 text-xl font-bold text-stone-500 ring-1 ring-stone-200">
+                        {business.business_name.charAt(0)}
+                      </div>
                     )}
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-stone-500">
+                        {getCategoryName(business.categories)}
+                      </p>
+
+                      <h3 className="mt-1 text-lg font-bold text-stone-900">
+                        {business.business_name}
+                      </h3>
+                    </div>
                   </div>
 
-                  <h3 className="text-lg font-bold text-stone-900">
-                    {business.business_name}
-                  </h3>
+                  {business.is_featured && (
+                    <span className="mb-3 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                      Featured
+                    </span>
+                  )}
 
                   <p className="mt-2 line-clamp-3 text-sm text-stone-600">
                     {business.description ?? 'No description added yet.'}

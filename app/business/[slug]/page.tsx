@@ -112,9 +112,23 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               {getCategoryName(business.categories)}
             </p>
 
-            <h1 className="mt-3 text-4xl font-bold">
-              {business.business_name}
-            </h1>
+           <div className="mt-4 flex items-center gap-5">
+  {business.logo_url ? (
+    <img
+      src={business.logo_url}
+      alt={`${business.business_name} logo`}
+      className="h-20 w-20 rounded-3xl bg-white object-cover ring-1 ring-white/20"
+    />
+  ) : (
+    <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/10 text-3xl font-bold text-white ring-1 ring-white/20">
+      {business.business_name.charAt(0)}
+    </div>
+  )}
+
+  <h1 className="text-4xl font-bold">
+    {business.business_name}
+  </h1>
+</div>
 
             {business.is_featured && (
               <span className="mt-4 inline-block rounded-full bg-amber-300 px-3 py-1 text-sm font-semibold text-stone-950">
@@ -207,18 +221,22 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 )}
 
                 {business.website && (
-                  <p>
-                    🌐{' '}
-                    <a
-                      className="underline"
-                      href={business.website}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Website
-                    </a>
-                  </p>
-                )}
+  <p>
+    🌐{' '}
+    <a
+      className="break-all underline"
+      href={
+        business.website.startsWith('http')
+          ? business.website
+          : `https://${business.website}`
+      }
+      target="_blank"
+      rel="noreferrer"
+    >
+      {business.website.replace(/^https?:\/\//, '')}
+    </a>
+  </p>
+)}
 
                 {business.facebook && (
                   <p>
