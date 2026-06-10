@@ -56,7 +56,7 @@ export default function DirectoryPage() {
             slug
           )
         `)
-        .eq('is_approved', true)
+        .eq('status', 'approved')
         .order('is_featured', { ascending: false })
         .order('business_name')
 

@@ -22,9 +22,12 @@ type Business = {
   website: string | null
   facebook: string | null
   instagram: string | null
+  address_line_1: string | null
+  address_line_2: string | null
   town: string | null
   postcode: string | null
   service_area: string | null
+  opening_times: string | null
   logo_url: string | null
 }
 
@@ -53,9 +56,12 @@ export default function BusinessDashboardPage() {
   const [website, setWebsite] = useState('')
   const [facebook, setFacebook] = useState('')
   const [instagram, setInstagram] = useState('')
+  const [addressLine1, setAddressLine1] = useState('')
+  const [addressLine2, setAddressLine2] = useState('')
   const [town, setTown] = useState('Ollerton')
   const [postcode, setPostcode] = useState('')
   const [serviceArea, setServiceArea] = useState('')
+  const [openingTimes, setOpeningTimes] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
 
   const [loading, setLoading] = useState(true)
@@ -95,9 +101,12 @@ export default function BusinessDashboardPage() {
           website,
           facebook,
           instagram,
+          address_line_1,
+          address_line_2,
           town,
           postcode,
           service_area,
+          opening_times,
           logo_url
         `)
         .eq('owner_id', userData.user.id)
@@ -116,9 +125,12 @@ export default function BusinessDashboardPage() {
         setWebsite(business.website ?? '')
         setFacebook(business.facebook ?? '')
         setInstagram(business.instagram ?? '')
+        setAddressLine1(business.address_line_1 ?? '')
+        setAddressLine2(business.address_line_2 ?? '')
         setTown(business.town ?? 'Ollerton')
         setPostcode(business.postcode ?? '')
         setServiceArea(business.service_area ?? '')
+        setOpeningTimes(business.opening_times ?? '')
         setLogoUrl(business.logo_url ?? '')
       }
 
@@ -157,7 +169,7 @@ export default function BusinessDashboardPage() {
 
     setLogoUrl(data.publicUrl)
     setUploadingLogo(false)
-    setMessage('Logo uploaded. Remember to save the business listing.')
+    setMessage('Logo uploaded. Remember to save your business listing.')
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -182,9 +194,12 @@ export default function BusinessDashboardPage() {
       website,
       facebook,
       instagram,
+      address_line_1: addressLine1,
+      address_line_2: addressLine2,
       town,
       postcode,
       service_area: serviceArea,
+      opening_times: openingTimes,
       logo_url: logoUrl || null,
       is_approved: false,
       updated_at: new Date().toISOString(),
@@ -259,7 +274,7 @@ export default function BusinessDashboardPage() {
             <div>
               <label className="mb-2 block font-semibold">Business name</label>
               <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
                 required
@@ -269,7 +284,7 @@ export default function BusinessDashboardPage() {
             <div>
               <label className="mb-2 block font-semibold">Category</label>
               <select
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 focus:border-stone-900 focus:outline-none"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
               >
@@ -285,7 +300,7 @@ export default function BusinessDashboardPage() {
             <div>
               <label className="mb-2 block font-semibold">Business description</label>
               <textarea
-                className="min-h-32 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
+                className="min-h-32 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -294,7 +309,7 @@ export default function BusinessDashboardPage() {
             <div>
               <label className="mb-2 block font-semibold">Services</label>
               <textarea
-                className="min-h-28 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
+                className="min-h-28 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
                 value={services}
                 onChange={(e) => setServices(e.target.value)}
               />
@@ -302,14 +317,14 @@ export default function BusinessDashboardPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Phone"
               />
 
               <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Email"
@@ -318,7 +333,7 @@ export default function BusinessDashboardPage() {
             </div>
 
             <input
-              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
               placeholder="Website"
@@ -326,17 +341,33 @@ export default function BusinessDashboardPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
                 value={facebook}
                 onChange={(e) => setFacebook(e.target.value)}
                 placeholder="Facebook"
               />
 
               <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
                 value={instagram}
                 onChange={(e) => setInstagram(e.target.value)}
                 placeholder="Instagram"
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <input
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                value={addressLine1}
+                onChange={(e) => setAddressLine1(e.target.value)}
+                placeholder="Address line 1"
+              />
+
+              <input
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                value={addressLine2}
+                onChange={(e) => setAddressLine2(e.target.value)}
+                placeholder="Address line 2"
               />
             </div>
 
@@ -356,8 +387,18 @@ export default function BusinessDashboardPage() {
               />
             </div>
 
+            <textarea
+              className="min-h-28 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+              value={openingTimes}
+              onChange={(e) => setOpeningTimes(e.target.value)}
+              placeholder={`Opening times, e.g.
+Monday: 9am - 5pm
+Tuesday: 9am - 5pm
+Wednesday: Closed`}
+            />
+
             <input
-              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400"
+              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
               value={serviceArea}
               onChange={(e) => setServiceArea(e.target.value)}
               placeholder="Service area"

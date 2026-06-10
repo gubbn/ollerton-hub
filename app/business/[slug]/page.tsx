@@ -3,9 +3,7 @@ import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
 type BusinessPageProps = {
-  params: Promise<{
-    slug: string
-  }>
+  params: Promise<{ slug: string }>
 }
 
 type CategoryRelation = { name: string } | { name: string }[] | null
@@ -25,8 +23,8 @@ type Business = {
   town: string | null
   postcode: string | null
   service_area: string | null
+  opening_times: string | null
   logo_url: string | null
-  cover_image_url: string | null
   is_featured: boolean
   categories: CategoryRelation
 }
@@ -36,15 +34,20 @@ type Review = {
   reviewer_name: string
   rating: number
   review_text: string
-  created_at: string
 }
 
 function getCategoryName(categories: CategoryRelation) {
   if (!categories) return 'Local business'
-  if (Array.isArray(categories)) {
-    return categories[0]?.name ?? 'Local business'
-  }
+  if (Array.isArray(categories)) return categories[0]?.name ?? 'Local business'
   return categories.name
+}
+
+function cleanWebsiteUrl(url: string) {
+  return url.startsWith('http') ? url : `https://${url}`
+}
+
+function displayWebsiteUrl(url: string) {
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
 export default async function BusinessPage({ params }: BusinessPageProps) {
@@ -67,8 +70,8 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
       town,
       postcode,
       service_area,
+      opening_times,
       logo_url,
-      cover_image_url,
       is_featured,
       categories (
         name
@@ -78,15 +81,13 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
     .eq('is_approved', true)
     .single()
 
-  if (!businessData) {
-    notFound()
-  }
+  if (!businessData) notFound()
 
   const business = businessData as Business
 
   const { data: reviewData } = await supabase
     .from('reviews')
-    .select('id, reviewer_name, rating, review_text, created_at')
+    .select('id, reviewer_name, rating, review_text')
     .eq('business_id', business.id)
     .eq('is_approved', true)
     .order('created_at', { ascending: false })
@@ -100,48 +101,48 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
       : null
 
   return (
-    <main className="min-h-screen bg-stone-50 text-stone-900">
+    <main className="min-h-screen bg-stone-100 text-stone-900">
       <section className="bg-stone-900 px-6 py-10 text-white">
         <div className="mx-auto max-w-5xl">
-          <Link href="/directory" className="text-sm text-amber-300 underline">
-            Back to directory
+          <Link href="/directory" className="text-sm text-red-300 underline">
+            ← Back to directory
           </Link>
 
           <div className="mt-8 rounded-3xl bg-white/10 p-6">
-            <p className="text-sm font-semibold uppercase tracking-wide text-amber-300">
+            <p className="text-sm font-semibold uppercase tracking-wide text-red-300">
               {getCategoryName(business.categories)}
             </p>
 
-           <div className="mt-4 flex items-center gap-5">
-  {business.logo_url ? (
-    <img
-      src={business.logo_url}
-      alt={`${business.business_name} logo`}
-      className="h-20 w-20 rounded-3xl bg-white object-cover ring-1 ring-white/20"
-    />
-  ) : (
-    <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/10 text-3xl font-bold text-white ring-1 ring-white/20">
-      {business.business_name.charAt(0)}
-    </div>
-  )}
+            <div className="mt-4 flex items-center gap-5">
+              {business.logo_url ? (
+                <img
+                  src={business.logo_url}
+                  alt={`${business.business_name} logo`}
+                  className="h-20 w-20 rounded-3xl bg-white object-cover ring-1 ring-white/20"
+                />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/10 text-3xl font-bold text-white ring-1 ring-white/20">
+                  {business.business_name.charAt(0)}
+                </div>
+              )}
 
-  <h1 className="text-4xl font-bold">
-    {business.business_name}
-  </h1>
-</div>
+              <div>
+                <h1 className="text-4xl font-bold">{business.business_name}</h1>
 
-            {business.is_featured && (
-              <span className="mt-4 inline-block rounded-full bg-amber-300 px-3 py-1 text-sm font-semibold text-stone-950">
-                Featured business
-              </span>
-            )}
+                {business.is_featured && (
+                  <span className="mt-3 inline-block rounded-full bg-amber-300 px-3 py-1 text-sm font-semibold text-stone-950">
+                    Featured business
+                  </span>
+                )}
 
-            {averageRating !== null && (
-              <p className="mt-4 text-stone-100">
-                ⭐ {averageRating.toFixed(1)} from {reviews.length} review
-                {reviews.length === 1 ? '' : 's'}
-              </p>
-            )}
+                {averageRating !== null && (
+                  <p className="mt-3 text-stone-100">
+                    ⭐ {averageRating.toFixed(1)} from {reviews.length} review
+                    {reviews.length === 1 ? '' : 's'}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -171,7 +172,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
                 <Link
                   href={`/business/${slug}/review`}
-                  className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
+                  className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
                 >
                   Leave a review
                 </Link>
@@ -208,7 +209,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
               <h2 className="text-xl font-bold">Contact</h2>
 
-              <div className="mt-4 space-y-3 text-sm">
+              <div className="mt-4 space-y-3 text-sm text-stone-700">
                 {business.phone && <p>📞 {business.phone}</p>}
 
                 {business.email && (
@@ -221,29 +222,25 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 )}
 
                 {business.website && (
-  <p>
-    🌐{' '}
-    <a
-      className="break-all underline"
-      href={
-        business.website.startsWith('http')
-          ? business.website
-          : `https://${business.website}`
-      }
-      target="_blank"
-      rel="noreferrer"
-    >
-      {business.website.replace(/^https?:\/\//, '')}
-    </a>
-  </p>
-)}
+                  <p>
+                    🌐{' '}
+                    <a
+                      className="break-all underline"
+                      href={cleanWebsiteUrl(business.website)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {displayWebsiteUrl(business.website)}
+                    </a>
+                  </p>
+                )}
 
                 {business.facebook && (
                   <p>
                     Facebook:{' '}
                     <a
-                      className="underline"
-                      href={business.facebook}
+                      className="break-all underline"
+                      href={cleanWebsiteUrl(business.facebook)}
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -256,8 +253,8 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                   <p>
                     Instagram:{' '}
                     <a
-                      className="underline"
-                      href={business.instagram}
+                      className="break-all underline"
+                      href={cleanWebsiteUrl(business.instagram)}
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -268,14 +265,31 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               </div>
             </div>
 
+            {business.opening_times && (
+              <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
+                <h2 className="text-xl font-bold">Opening times</h2>
+
+                <p className="mt-4 whitespace-pre-line text-sm text-stone-700">
+                  {business.opening_times}
+                </p>
+              </div>
+            )}
+
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-              <h2 className="text-xl font-bold">Location</h2>
+              <h2 className="text-xl font-bold">Address</h2>
 
               <div className="mt-4 text-sm text-stone-700">
                 {business.address_line_1 && <p>{business.address_line_1}</p>}
                 {business.address_line_2 && <p>{business.address_line_2}</p>}
                 {business.town && <p>{business.town}</p>}
                 {business.postcode && <p>{business.postcode}</p>}
+
+                {!business.address_line_1 &&
+                  !business.address_line_2 &&
+                  !business.town &&
+                  !business.postcode && (
+                    <p>No address added yet.</p>
+                  )}
 
                 {business.service_area && (
                   <p className="mt-4">
