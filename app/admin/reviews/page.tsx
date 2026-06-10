@@ -14,9 +14,9 @@ type Review = {
   review_text: string | null
   is_approved: boolean | null
   created_at: string
-  businesses: {
-    business_name: string
-  } | null
+businesses: {
+  business_name: string
+}[] | null
 }
 
 export default function AdminReviewsPage() {
@@ -191,7 +191,7 @@ export default function AdminReviewsPage() {
               <div className="flex flex-wrap justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">
-                    {review.businesses?.business_name || 'Unknown business'}
+                    {review.businesses?.[0]?.business_name || 'Unknown business'}
                   </h2>
 
                   <p className="mt-1 text-sm text-gray-600">
