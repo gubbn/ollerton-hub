@@ -23,7 +23,7 @@ export default function Footer() {
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <h4 className="mb-3 text-sm font-bold text-stone-900">
-                For businesses
+                For Businesses
               </h4>
 
               <div className="flex flex-col gap-2 text-sm text-stone-600">

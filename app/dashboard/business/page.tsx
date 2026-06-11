@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -8,7 +8,6 @@ import { supabase } from '@/lib/supabaseClient'
 type Category = {
   id: string
   name: string
-  slug: string
 }
 
 type Business = {
@@ -30,6 +29,35 @@ type Business = {
   service_area: string | null
   opening_times: string | null
   logo_url: string | null
+  is_approved: boolean
+  is_featured: boolean
+}
+
+type BusinessStat = {
+  event_type: string
+}
+
+const emptyBusiness: Business = {
+  id: '',
+  business_name: '',
+  slug: '',
+  category_id: null,
+  description: '',
+  services: '',
+  phone: '',
+  email: '',
+  website: '',
+  facebook: '',
+  instagram: '',
+  address_line_1: '',
+  address_line_2: '',
+  town: '',
+  postcode: '',
+  service_area: '',
+  opening_times: '',
+  logo_url: '',
+  is_approved: false,
+  is_featured: false,
 }
 
 function makeSlug(value: string) {
@@ -41,458 +69,585 @@ function makeSlug(value: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-export default function BusinessDashboardPage() {
+function StatCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string
+  value: number
+  icon: string
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
+      <div className="text-2xl">{icon}</div>
+      <p className="mt-3 text-sm font-medium text-stone-500">{label}</p>
+      <p className="mt-1 text-3xl font-bold text-stone-900">{value}</p>
+    </div>
+  )
+}
+
+export default function DashboardBusinessPage() {
   const router = useRouter()
-
-  const [userId, setUserId] = useState<string | null>(null)
-  const [categories, setCategories] = useState<Category[]>([])
-  const [businessId, setBusinessId] = useState<string | null>(null)
-
-  const [businessName, setBusinessName] = useState('')
-  const [categoryId, setCategoryId] = useState('')
-  const [suggestedCategory, setSuggestedCategory] = useState('')
-
-  const [description, setDescription] = useState('')
-  const [services, setServices] = useState('')
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [website, setWebsite] = useState('')
-  const [facebook, setFacebook] = useState('')
-  const [instagram, setInstagram] = useState('')
-  const [addressLine1, setAddressLine1] = useState('')
-  const [addressLine2, setAddressLine2] = useState('')
-  const [town, setTown] = useState('Ollerton')
-  const [postcode, setPostcode] = useState('')
-  const [serviceArea, setServiceArea] = useState('')
-  const [openingTimes, setOpeningTimes] = useState('')
-  const [logoUrl, setLogoUrl] = useState('')
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [userId, setUserId] = useState<string | null>(null)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [business, setBusiness] = useState<Business>(emptyBusiness)
 
-  const selectedCategory = categories.find((item) => item.id === categoryId)
-  const isOtherCategory = selectedCategory?.slug === 'other'
+  const [stats, setStats] = useState({
+    profile_view: 0,
+    website_click: 0,
+    phone_click: 0,
+    email_click: 0,
+    facebook_click: 0,
+    instagram_click: 0,
+  })
+
+  const publicListingUrl = useMemo(() => {
+    if (!business.slug) return null
+    return `/business/${business.slug}`
+  }, [business.slug])
 
   useEffect(() => {
-    async function loadPage() {
-      const { data: userData } = await supabase.auth.getUser()
+    loadPage()
+  }, [])
 
-      if (!userData.user) {
-        router.push('/login')
-        return
-      }
+  async function loadPage() {
+    setLoading(true)
+    setError('')
 
-      setUserId(userData.user.id)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-      const { data: categoryData } = await supabase
-        .from('categories')
-        .select('id, name, slug')
-        .order('name')
-
-      setCategories((categoryData as Category[] | null) ?? [])
-
-      const { data: businessData } = await supabase
-        .from('businesses')
-        .select(`
-          id,
-          business_name,
-          slug,
-          category_id,
-          description,
-          services,
-          phone,
-          email,
-          website,
-          facebook,
-          instagram,
-          address_line_1,
-          address_line_2,
-          town,
-          postcode,
-          service_area,
-          opening_times,
-          logo_url
-        `)
-        .eq('owner_id', userData.user.id)
-        .maybeSingle()
-
-      if (businessData) {
-        const business = businessData as Business
-
-        setBusinessId(business.id)
-        setBusinessName(business.business_name ?? '')
-        setCategoryId(business.category_id ?? '')
-        setDescription(business.description ?? '')
-        setServices(business.services ?? '')
-        setPhone(business.phone ?? '')
-        setEmail(business.email ?? '')
-        setWebsite(business.website ?? '')
-        setFacebook(business.facebook ?? '')
-        setInstagram(business.instagram ?? '')
-        setAddressLine1(business.address_line_1 ?? '')
-        setAddressLine2(business.address_line_2 ?? '')
-        setTown(business.town ?? 'Ollerton')
-        setPostcode(business.postcode ?? '')
-        setServiceArea(business.service_area ?? '')
-        setOpeningTimes(business.opening_times ?? '')
-        setLogoUrl(business.logo_url ?? '')
-      }
-
-      setLoading(false)
+    if (!user) {
+      router.push('/login')
+      return
     }
 
-    loadPage()
-  }, [router])
+    setUserId(user.id)
 
-  async function handleLogoUpload(file: File) {
+    const { data: categoryData } = await supabase
+      .from('categories')
+      .select('id, name')
+      .order('name', { ascending: true })
+
+    setCategories((categoryData as Category[] | null) ?? [])
+
+    const { data: businessData, error: businessError } = await supabase
+      .from('businesses')
+      .select(`
+        id,
+        business_name,
+        slug,
+        category_id,
+        description,
+        services,
+        phone,
+        email,
+        website,
+        facebook,
+        instagram,
+        address_line_1,
+        address_line_2,
+        town,
+        postcode,
+        service_area,
+        opening_times,
+        logo_url,
+        is_approved,
+        is_featured
+      `)
+      .eq('owner_id', user.id)
+      .maybeSingle()
+
+    if (businessError) {
+      setError(businessError.message)
+      setLoading(false)
+      return
+    }
+
+    if (businessData) {
+      const loadedBusiness = businessData as Business
+      setBusiness(loadedBusiness)
+      await loadStats(loadedBusiness.id)
+    }
+
+    setLoading(false)
+  }
+
+  async function loadStats(businessId: string) {
+    const { data } = await supabase
+      .from('business_stats')
+      .select('event_type')
+      .eq('business_id', businessId)
+
+    const statsData = (data as BusinessStat[] | null) ?? []
+
+    const nextStats = {
+      profile_view: 0,
+      website_click: 0,
+      phone_click: 0,
+      email_click: 0,
+      facebook_click: 0,
+      instagram_click: 0,
+    }
+
+    statsData.forEach((item) => {
+      if (item.event_type in nextStats) {
+        nextStats[item.event_type as keyof typeof nextStats] += 1
+      }
+    })
+
+    setStats(nextStats)
+  }
+
+  function updateField(field: keyof Business, value: string) {
+    setBusiness((current) => ({
+      ...current,
+      [field]: value,
+      ...(field === 'business_name' && !current.id
+        ? { slug: makeSlug(value) }
+        : {}),
+    }))
+  }
+
+  async function uploadLogo(file: File) {
     if (!userId) return
 
-    setUploadingLogo(true)
+    setUploading(true)
+    setError('')
     setMessage('')
 
     const fileExt = file.name.split('.').pop()
     const fileName = `${userId}-${Date.now()}.${fileExt}`
-    const filePath = `logos/${fileName}`
+    const filePath = `business-logos/${fileName}`
 
     const { error: uploadError } = await supabase.storage
-      .from('business-logos')
+      .from('logos')
       .upload(filePath, file, {
-        cacheControl: '3600',
         upsert: true,
       })
 
     if (uploadError) {
-      setMessage(uploadError.message)
-      setUploadingLogo(false)
+      setError(uploadError.message)
+      setUploading(false)
       return
     }
 
-    const { data } = supabase.storage
-      .from('business-logos')
-      .getPublicUrl(filePath)
+    const { data } = supabase.storage.from('logos').getPublicUrl(filePath)
 
-    setLogoUrl(data.publicUrl)
-    setUploadingLogo(false)
-    setMessage('Logo uploaded. Remember to save your business listing.')
+    setBusiness((current) => ({
+      ...current,
+      logo_url: data.publicUrl,
+    }))
+
+    setMessage('Logo uploaded. Remember to save your business.')
+    setUploading(false)
   }
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-
+  async function saveBusiness() {
     if (!userId) return
 
     setSaving(true)
+    setError('')
     setMessage('')
 
-    const slug = makeSlug(businessName)
+    const slug = business.slug || makeSlug(business.business_name)
 
-    if (isOtherCategory && !suggestedCategory.trim()) {
-      setMessage('Please suggest a category, or choose an existing one.')
+    const payload = {
+      owner_id: userId,
+      business_name: business.business_name.trim(),
+      slug,
+      category_id: business.category_id || null,
+      description: business.description || null,
+      services: business.services || null,
+      phone: business.phone || null,
+      email: business.email || null,
+      website: business.website || null,
+      facebook: business.facebook || null,
+      instagram: business.instagram || null,
+      address_line_1: business.address_line_1 || null,
+      address_line_2: business.address_line_2 || null,
+      town: business.town || null,
+      postcode: business.postcode || null,
+      service_area: business.service_area || null,
+      opening_times: business.opening_times || null,
+      logo_url: business.logo_url || null,
+    }
+
+    if (!payload.business_name) {
+      setError('Business name is required.')
       setSaving(false)
       return
     }
 
-    const payload = {
-      owner_id: userId,
-      business_name: businessName,
-      slug,
-      category_id: categoryId || null,
-      description,
-      services,
-      phone,
-      email,
-      website,
-      facebook,
-      instagram,
-      address_line_1: addressLine1,
-      address_line_2: addressLine2,
-      town,
-      postcode,
-      service_area: serviceArea,
-      opening_times: openingTimes,
-      logo_url: logoUrl || null,
-      is_approved: false,
-      status: 'pending',
-      updated_at: new Date().toISOString(),
+    const query = business.id
+      ? supabase.from('businesses').update(payload).eq('id', business.id)
+      : supabase.from('businesses').insert(payload).select().single()
+
+    const { data, error: saveError } = await query
+
+    if (saveError) {
+      setError(saveError.message)
+      setSaving(false)
+      return
     }
 
-    let savedBusinessId = businessId
-
-    if (businessId) {
-      const { error } = await supabase
-        .from('businesses')
-        .update(payload)
-        .eq('id', businessId)
-
-      if (error) {
-        setMessage(error.message)
-        setSaving(false)
-        return
-      }
+    if (data) {
+      setBusiness(data as Business)
     } else {
-      const { data, error } = await supabase
-        .from('businesses')
-        .insert(payload)
-        .select('id')
-        .single()
-
-      if (error) {
-        setMessage(error.message)
-        setSaving(false)
-        return
-      }
-
-      savedBusinessId = data.id
-      setBusinessId(data.id)
+      setBusiness((current) => ({
+        ...current,
+        slug,
+      }))
     }
 
-    if (isOtherCategory && suggestedCategory.trim()) {
-      const { error: suggestionError } = await supabase
-        .from('category_suggestions')
-        .insert({
-          business_id: savedBusinessId,
-          suggestion: suggestedCategory.trim(),
-        })
-
-      if (suggestionError) {
-        setMessage(
-          `Business saved, but category suggestion could not be submitted: ${suggestionError.message}`
-        )
-        setSaving(false)
-        return
-      }
-
-      setSuggestedCategory('')
-    }
-
-    setMessage(
-      businessId
-        ? 'Business listing updated. It may need approval before public changes show.'
-        : 'Business listing created. It will appear publicly after approval.'
-    )
-
+    setMessage('Business saved successfully.')
     setSaving(false)
   }
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-stone-100 px-6 py-12 text-stone-900">
-        Loading...
+      <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
+        <div className="mx-auto max-w-5xl">
+          <p>Loading business dashboard...</p>
+        </div>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-6 py-12 text-stone-900">
-      <div className="mx-auto max-w-4xl">
-        <Link href="/dashboard" className="font-semibold underline">
-          Back to dashboard
+    <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
+      <div className="mx-auto max-w-5xl space-y-8">
+        <div>
+          <Link href="/dashboard" className="text-sm text-red-700 underline">
+            ← Back to dashboard
+          </Link>
+
+          <div className="mt-6 rounded-3xl bg-stone-900 p-6 text-white">
+            <p className="text-sm font-semibold uppercase tracking-wide text-red-300">
+              Business owner area
+            </p>
+
+            <h1 className="mt-2 text-3xl font-bold">
+              Manage your business listing
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-stone-200">
+              Update your public profile, contact details, opening times and
+              logo.
+            </p>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              {publicListingUrl && business.is_approved && (
+                <Link
+                  href={publicListingUrl}
+                  className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                >
+                  View public listing
+                </Link>
+              )}
+
+              {!business.is_approved && business.id && (
+                <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+                  Awaiting approval
+                </span>
+              )}
+
+              {business.is_featured && (
+                <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
+                  Featured listing
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+{business.id && (
+  <section className="rounded-2xl bg-stone-50 p-4 ring-1 ring-stone-200">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+          Listing performance
+        </p>
+
+        <h2 className="mt-1 text-lg font-bold text-stone-900">
+          How your listing is doing
+        </h2>
+      </div>
+
+      {publicListingUrl && (
+        <Link
+          href={publicListingUrl}
+          className="text-sm font-medium text-red-700 hover:underline"
+        >
+          View public listing →
         </Link>
+      )}
+    </div>
 
-        <div className="mt-6 rounded-3xl bg-white p-8 shadow-lg ring-1 ring-stone-200">
-          <h1 className="text-3xl font-bold">
-            {businessId ? 'Edit business listing' : 'Create business listing'}
-          </h1>
+    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
+        <p className="text-2xl font-bold">{stats.profile_view}</p>
+        <p className="mt-1 text-xs text-stone-500">Views</p>
+      </div>
 
-          <form onSubmit={handleSave} className="mt-8 space-y-6">
+      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
+        <p className="text-2xl font-bold">{stats.website_click}</p>
+        <p className="mt-1 text-xs text-stone-500">Website</p>
+      </div>
+
+      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
+        <p className="text-2xl font-bold">{stats.phone_click}</p>
+        <p className="mt-1 text-xs text-stone-500">Calls</p>
+      </div>
+
+      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
+        <p className="text-2xl font-bold">{stats.email_click}</p>
+        <p className="mt-1 text-xs text-stone-500">Emails</p>
+      </div>
+
+      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
+        <p className="text-2xl font-bold">{stats.facebook_click}</p>
+        <p className="mt-1 text-xs text-stone-500">Facebook</p>
+      </div>
+
+      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
+        <p className="text-2xl font-bold">{stats.instagram_click}</p>
+        <p className="mt-1 text-xs text-stone-500">Instagram</p>
+      </div>
+    </div>
+  </section>
+)}
+        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
+          <div className="grid gap-5 md:grid-cols-2">
             <div>
-              <label className="mb-2 block font-semibold">Business logo</label>
-
-              {logoUrl ? (
-                <img
-                  src={logoUrl}
-                  alt="Business logo preview"
-                  className="mb-4 h-24 w-24 rounded-2xl object-cover ring-1 ring-stone-200"
-                />
-              ) : (
-                <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-2xl bg-stone-100 text-sm text-stone-500 ring-1 ring-stone-200">
-                  No logo
-                </div>
-              )}
-
+              <label className="text-sm font-semibold">Business name</label>
               <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) handleLogoUpload(file)
-                }}
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                value={business.business_name}
+                onChange={(event) =>
+                  updateField('business_name', event.target.value)
+                }
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
               />
-
-              {uploadingLogo && (
-                <p className="mt-2 text-sm text-stone-600">Uploading logo...</p>
-              )}
             </div>
 
             <div>
-              <label className="mb-2 block font-semibold">Business name</label>
+              <label className="text-sm font-semibold">Slug</label>
               <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                required
+                value={business.slug}
+                onChange={(event) => updateField('slug', makeSlug(event.target.value))}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
               />
             </div>
 
             <div>
-              <label className="mb-2 block font-semibold">Category</label>
+              <label className="text-sm font-semibold">Category</label>
               <select
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={categoryId}
-                onChange={(e) => {
-                  setCategoryId(e.target.value)
-                  setSuggestedCategory('')
-                }}
+                value={business.category_id ?? ''}
+                onChange={(event) =>
+                  updateField('category_id', event.target.value)
+                }
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
               >
-                <option value="">Select a category</option>
+                <option value="">Select category</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
                   </option>
                 ))}
               </select>
+            </div>
 
-              {isOtherCategory && (
-                <div className="mt-4 rounded-2xl bg-stone-50 p-4">
-                  <label className="mb-2 block font-semibold">
-                    Suggest a category
-                  </label>
+            <div>
+              <label className="text-sm font-semibold">Logo</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) uploadLogo(file)
+                }}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
 
-                  <input
-                    className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                    value={suggestedCategory}
-                    onChange={(e) => setSuggestedCategory(e.target.value)}
-                    placeholder="Example: Pet grooming, dance classes, mobile mechanic"
-                  />
+              {business.logo_url && (
+                <img
+                  src={business.logo_url}
+                  alt="Business logo preview"
+                  className="mt-4 h-20 w-20 rounded-2xl object-cover ring-1 ring-stone-200"
+                />
+              )}
 
-                  <p className="mt-2 text-sm text-stone-600">
-                    Your listing will be submitted under Other for now. Your
-                    suggested category will be reviewed by Ollerton Hub.
-                  </p>
-                </div>
+              {uploading && (
+                <p className="mt-2 text-sm text-stone-500">Uploading...</p>
               )}
             </div>
 
-            <div>
-              <label className="mb-2 block font-semibold">Business description</label>
+            <div className="md:col-span-2">
+              <label className="text-sm font-semibold">Description</label>
               <textarea
-                className="min-h-32 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                value={business.description ?? ''}
+                onChange={(event) =>
+                  updateField('description', event.target.value)
+                }
+                rows={5}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-semibold">Services</label>
+              <textarea
+                value={business.services ?? ''}
+                onChange={(event) => updateField('services', event.target.value)}
+                rows={5}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
               />
             </div>
 
             <div>
-              <label className="mb-2 block font-semibold">Services</label>
+              <label className="text-sm font-semibold">Phone</label>
+              <input
+                value={business.phone ?? ''}
+                onChange={(event) => updateField('phone', event.target.value)}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Email</label>
+              <input
+                value={business.email ?? ''}
+                onChange={(event) => updateField('email', event.target.value)}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Website</label>
+              <input
+                value={business.website ?? ''}
+                onChange={(event) => updateField('website', event.target.value)}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Facebook</label>
+              <input
+                value={business.facebook ?? ''}
+                onChange={(event) => updateField('facebook', event.target.value)}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Instagram</label>
+              <input
+                value={business.instagram ?? ''}
+                onChange={(event) =>
+                  updateField('instagram', event.target.value)
+                }
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Address line 1</label>
+              <input
+                value={business.address_line_1 ?? ''}
+                onChange={(event) =>
+                  updateField('address_line_1', event.target.value)
+                }
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Address line 2</label>
+              <input
+                value={business.address_line_2 ?? ''}
+                onChange={(event) =>
+                  updateField('address_line_2', event.target.value)
+                }
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Town</label>
+              <input
+                value={business.town ?? ''}
+                onChange={(event) => updateField('town', event.target.value)}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold">Postcode</label>
+              <input
+                value={business.postcode ?? ''}
+                onChange={(event) => updateField('postcode', event.target.value)}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-semibold">Service area</label>
+              <input
+                value={business.service_area ?? ''}
+                onChange={(event) =>
+                  updateField('service_area', event.target.value)
+                }
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-semibold">Opening times</label>
               <textarea
-                className="min-h-28 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={services}
-                onChange={(e) => setServices(e.target.value)}
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Phone"
-              />
-
-              <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
-                type="email"
-              />
-            </div>
-
-            <input
-              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="Website"
-            />
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={facebook}
-                onChange={(e) => setFacebook(e.target.value)}
-                placeholder="Facebook"
-              />
-
-              <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={instagram}
-                onChange={(e) => setInstagram(e.target.value)}
-                placeholder="Instagram"
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={addressLine1}
-                onChange={(e) => setAddressLine1(e.target.value)}
-                placeholder="Address line 1"
-              />
-
-              <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={addressLine2}
-                onChange={(e) => setAddressLine2(e.target.value)}
-                placeholder="Address line 2"
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={town}
-                onChange={(e) => setTown(e.target.value)}
-                placeholder="Town"
-              />
-
-              <input
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-                value={postcode}
-                onChange={(e) => setPostcode(e.target.value)}
-                placeholder="Postcode"
-              />
-            </div>
-
-            <textarea
-              className="min-h-28 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-              value={openingTimes}
-              onChange={(e) => setOpeningTimes(e.target.value)}
-              placeholder={`Opening times, e.g.
-Monday: 9am - 5pm
+                value={business.opening_times ?? ''}
+                onChange={(event) =>
+                  updateField('opening_times', event.target.value)
+                }
+                rows={5}
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+                placeholder={`Monday: 9am - 5pm
 Tuesday: 9am - 5pm
-Wednesday: Closed`}
-            />
+Wednesday: 9am - 5pm`}
+              />
+            </div>
+          </div>
 
-            <input
-              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
-              value={serviceArea}
-              onChange={(e) => setServiceArea(e.target.value)}
-              placeholder="Service area"
-            />
+          {error && (
+            <p className="mt-6 rounded-xl bg-red-50 p-4 text-sm font-medium text-red-700">
+              {error}
+            </p>
+          )}
 
+          {message && (
+            <p className="mt-6 rounded-xl bg-green-50 p-4 text-sm font-medium text-green-700">
+              {message}
+            </p>
+          )}
+
+          <div className="mt-8 flex justify-end">
             <button
+              onClick={saveBusiness}
               disabled={saving}
-              className="w-full rounded-xl bg-red-700 px-4 py-3 font-semibold text-white hover:bg-red-800 disabled:opacity-60"
+              className="rounded-xl bg-red-700 px-6 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
             >
-              {saving ? 'Saving...' : 'Save business listing'}
+              {saving ? 'Saving...' : 'Save business'}
             </button>
-          </form>
-
-          {message && <p className="mt-4 text-sm text-stone-700">{message}</p>}
-        </div>
+          </div>
+        </section>
       </div>
     </main>
   )

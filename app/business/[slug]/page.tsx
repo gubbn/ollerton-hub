@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import BusinessStatTracker from './BusinessStatTracker'
 
 type BusinessPageProps = {
   params: Promise<{ slug: string }>
@@ -104,6 +105,8 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
   return (
     <main className="min-h-screen bg-stone-100 text-stone-900">
+      <BusinessStatTracker businessId={business.id} eventType="profile_view" />
+
       <section className="bg-stone-900 px-6 py-10 text-white">
         <div className="mx-auto max-w-5xl">
           <Link href="/directory" className="text-sm text-red-300 underline">
@@ -192,11 +195,9 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                       className="rounded-xl border border-stone-200 p-4"
                     >
                       <p className="font-semibold">{review.reviewer_name}</p>
-
                       <p className="mt-1 text-sm text-amber-600">
                         {'⭐'.repeat(review.rating)}
                       </p>
-
                       <p className="mt-3 text-stone-700">
                         {review.review_text}
                       </p>
@@ -216,56 +217,76 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               <h2 className="text-xl font-bold">Contact</h2>
 
               <div className="mt-4 space-y-3 text-sm text-stone-700">
-                {business.phone && <p>📞 {business.phone}</p>}
+                {business.phone && (
+                  <p>
+                    📞{' '}
+                    <BusinessStatTracker
+                      businessId={business.id}
+                      eventType="phone_click"
+                      href={`tel:${business.phone}`}
+                      className="underline"
+                    >
+                      {business.phone}
+                    </BusinessStatTracker>
+                  </p>
+                )}
 
                 {business.email && (
                   <p>
                     ✉️{' '}
-                    <a className="underline" href={`mailto:${business.email}`}>
+                    <BusinessStatTracker
+                      businessId={business.id}
+                      eventType="email_click"
+                      href={`mailto:${business.email}`}
+                      className="underline"
+                    >
                       {business.email}
-                    </a>
+                    </BusinessStatTracker>
                   </p>
                 )}
 
                 {business.website && (
                   <p>
                     🌐{' '}
-                    <a
-                      className="break-all underline"
+                    <BusinessStatTracker
+                      businessId={business.id}
+                      eventType="website_click"
                       href={cleanWebsiteUrl(business.website)}
+                      className="break-all underline"
                       target="_blank"
-                      rel="noreferrer"
                     >
                       {displayWebsiteUrl(business.website)}
-                    </a>
+                    </BusinessStatTracker>
                   </p>
                 )}
 
                 {business.facebook && (
                   <p>
                     Facebook:{' '}
-                    <a
-                      className="break-all underline"
+                    <BusinessStatTracker
+                      businessId={business.id}
+                      eventType="facebook_click"
                       href={cleanWebsiteUrl(business.facebook)}
+                      className="break-all underline"
                       target="_blank"
-                      rel="noreferrer"
                     >
                       View page
-                    </a>
+                    </BusinessStatTracker>
                   </p>
                 )}
 
                 {business.instagram && (
                   <p>
                     Instagram:{' '}
-                    <a
-                      className="break-all underline"
+                    <BusinessStatTracker
+                      businessId={business.id}
+                      eventType="instagram_click"
                       href={cleanWebsiteUrl(business.instagram)}
+                      className="break-all underline"
                       target="_blank"
-                      rel="noreferrer"
                     >
                       View profile
-                    </a>
+                    </BusinessStatTracker>
                   </p>
                 )}
               </div>
@@ -274,7 +295,6 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
             {business.opening_times && (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
                 <h2 className="text-xl font-bold">Opening times</h2>
-
                 <p className="mt-4 whitespace-pre-line text-sm text-stone-700">
                   {business.opening_times}
                 </p>
