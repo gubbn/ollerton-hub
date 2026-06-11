@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabaseClient'
 type Category = {
   id: string
   name: string
+  slug: string
 }
 
 type Business = {
@@ -49,6 +50,8 @@ export default function BusinessDashboardPage() {
 
   const [businessName, setBusinessName] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [suggestedCategory, setSuggestedCategory] = useState('')
+
   const [description, setDescription] = useState('')
   const [services, setServices] = useState('')
   const [phone, setPhone] = useState('')
@@ -69,6 +72,9 @@ export default function BusinessDashboardPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [message, setMessage] = useState('')
 
+  const selectedCategory = categories.find((item) => item.id === categoryId)
+  const isOtherCategory = selectedCategory?.slug === 'other'
+
   useEffect(() => {
     async function loadPage() {
       const { data: userData } = await supabase.auth.getUser()
@@ -82,7 +88,7 @@ export default function BusinessDashboardPage() {
 
       const { data: categoryData } = await supabase
         .from('categories')
-        .select('id, name')
+        .select('id, name, slug')
         .order('name')
 
       setCategories((categoryData as Category[] | null) ?? [])
@@ -182,6 +188,12 @@ export default function BusinessDashboardPage() {
 
     const slug = makeSlug(businessName)
 
+    if (isOtherCategory && !suggestedCategory.trim()) {
+      setMessage('Please suggest a category, or choose an existing one.')
+      setSaving(false)
+      return
+    }
+
     const payload = {
       owner_id: userId,
       business_name: businessName,
@@ -202,19 +214,63 @@ export default function BusinessDashboardPage() {
       opening_times: openingTimes,
       logo_url: logoUrl || null,
       is_approved: false,
+      status: 'pending',
       updated_at: new Date().toISOString(),
     }
 
-    const { error } = businessId
-      ? await supabase.from('businesses').update(payload).eq('id', businessId)
-      : await supabase.from('businesses').insert(payload)
+    let savedBusinessId = businessId
+
+    if (businessId) {
+      const { error } = await supabase
+        .from('businesses')
+        .update(payload)
+        .eq('id', businessId)
+
+      if (error) {
+        setMessage(error.message)
+        setSaving(false)
+        return
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('businesses')
+        .insert(payload)
+        .select('id')
+        .single()
+
+      if (error) {
+        setMessage(error.message)
+        setSaving(false)
+        return
+      }
+
+      savedBusinessId = data.id
+      setBusinessId(data.id)
+    }
+
+    if (isOtherCategory && suggestedCategory.trim()) {
+      const { error: suggestionError } = await supabase
+        .from('category_suggestions')
+        .insert({
+          business_id: savedBusinessId,
+          suggestion: suggestedCategory.trim(),
+        })
+
+      if (suggestionError) {
+        setMessage(
+          `Business saved, but category suggestion could not be submitted: ${suggestionError.message}`
+        )
+        setSaving(false)
+        return
+      }
+
+      setSuggestedCategory('')
+    }
 
     setMessage(
-      error
-        ? error.message
-        : businessId
-          ? 'Business listing updated. It may need approval before public changes show.'
-          : 'Business listing created. It will appear publicly after approval.'
+      businessId
+        ? 'Business listing updated. It may need approval before public changes show.'
+        : 'Business listing created. It will appear publicly after approval.'
     )
 
     setSaving(false)
@@ -286,7 +342,10 @@ export default function BusinessDashboardPage() {
               <select
                 className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
                 value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
+                onChange={(e) => {
+                  setCategoryId(e.target.value)
+                  setSuggestedCategory('')
+                }}
               >
                 <option value="">Select a category</option>
                 {categories.map((category) => (
@@ -295,6 +354,26 @@ export default function BusinessDashboardPage() {
                   </option>
                 ))}
               </select>
+
+              {isOtherCategory && (
+                <div className="mt-4 rounded-2xl bg-stone-50 p-4">
+                  <label className="mb-2 block font-semibold">
+                    Suggest a category
+                  </label>
+
+                  <input
+                    className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900"
+                    value={suggestedCategory}
+                    onChange={(e) => setSuggestedCategory(e.target.value)}
+                    placeholder="Example: Pet grooming, dance classes, mobile mechanic"
+                  />
+
+                  <p className="mt-2 text-sm text-stone-600">
+                    Your listing will be submitted under Other for now. Your
+                    suggested category will be reviewed by Ollerton Hub.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>

@@ -304,6 +304,15 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                     {business.service_area}
                   </p>
                 )}
+
+                <div className="mt-8 border-t pt-4">
+  <Link
+    href={`/contact?subject=Report Listing&business=${business.slug}`}
+    className="text-sm text-red-600 hover:text-red-700 hover:underline"
+  >
+    Report this listing
+  </Link>
+</div>
               </div>
             </div>
           </aside>
