@@ -11,33 +11,48 @@ type Business = {
   slug: string
 }
 
+function settingEnabled(value: string | null | undefined) {
+  return value !== 'false'
+}
+
 export default function ReviewPage() {
   const params = useParams()
   const slug = params.slug as string
 
   const [business, setBusiness] = useState<Business | null>(null)
+  const [reviewModeration, setReviewModeration] = useState(true)
+
   const [reviewerName, setReviewerName] = useState('')
   const [reviewerEmail, setReviewerEmail] = useState('')
   const [rating, setRating] = useState(5)
   const [reviewText, setReviewText] = useState('')
+
   const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    async function loadBusiness() {
-      const { data } = await supabase
+    async function loadPage() {
+      const { data: businessData } = await supabase
         .from('businesses')
         .select('id, business_name, slug')
         .eq('slug', slug)
         .eq('is_approved', true)
         .single()
 
-      setBusiness(data as Business | null)
+      const { data: settingData } = await supabase
+        .from('site_settings')
+        .select('setting_value')
+        .eq('setting_key', 'review_moderation')
+        .single()
+
+      setBusiness(businessData as Business | null)
+      setReviewModeration(settingEnabled(settingData?.setting_value))
       setLoading(false)
     }
 
-    loadBusiness()
+    loadPage()
   }, [slug])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,24 +62,44 @@ export default function ReviewPage() {
 
     setSaving(true)
     setMessage('')
+    setError('')
+
+    if (!reviewerName.trim()) {
+      setError('Please enter your name.')
+      setSaving(false)
+      return
+    }
+
+    if (!reviewText.trim()) {
+      setError('Please enter your review.')
+      setSaving(false)
+      return
+    }
+
+    const shouldAutoApprove = !reviewModeration
 
     const { error } = await supabase.from('reviews').insert({
       business_id: business.id,
-      reviewer_name: reviewerName,
-      reviewer_email: reviewerEmail || null,
+      reviewer_name: reviewerName.trim(),
+      reviewer_email: reviewerEmail.trim() || null,
       rating,
-      review_text: reviewText,
-      is_approved: false,
+      review_text: reviewText.trim(),
+      is_approved: shouldAutoApprove,
     })
 
     if (error) {
-      setMessage(error.message)
+      setError(error.message)
     } else {
       setReviewerName('')
       setReviewerEmail('')
       setRating(5)
       setReviewText('')
-      setMessage('Review submitted. It will appear once approved.')
+
+      setMessage(
+        shouldAutoApprove
+          ? 'Review submitted. Thank you for sharing your experience.'
+          : 'Review submitted. It will appear once approved.'
+      )
     }
 
     setSaving(false)
@@ -108,6 +143,12 @@ export default function ReviewPage() {
             Share your experience with {business.business_name}.
           </p>
 
+          {reviewModeration && (
+            <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+              Reviews are checked before appearing publicly.
+            </p>
+          )}
+
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <div>
               <label className="mb-2 block font-semibold">Your name</label>
@@ -121,7 +162,10 @@ export default function ReviewPage() {
 
             <div>
               <label className="mb-2 block font-semibold">
-                Email address <span className="font-normal text-stone-500">(not public)</span>
+                Email address{' '}
+                <span className="font-normal text-stone-500">
+                  (not public)
+                </span>
               </label>
               <input
                 className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
@@ -164,7 +208,17 @@ export default function ReviewPage() {
             </button>
           </form>
 
-          {message && <p className="mt-4 text-sm text-stone-700">{message}</p>}
+          {error && (
+            <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+
+          {message && (
+            <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-700">
+              {message}
+            </p>
+          )}
         </div>
       </div>
     </main>

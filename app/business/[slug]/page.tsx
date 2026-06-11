@@ -129,12 +129,19 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               <div>
                 <h1 className="text-4xl font-bold">{business.business_name}</h1>
 
-                {business.is_featured && (
-                  <span className="mt-3 inline-block rounded-full bg-amber-300 px-3 py-1 text-sm font-semibold text-stone-950">
-                    Featured business
-                  </span>
-                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+  {business.is_featured && (
+    <span className="inline-block rounded-full bg-amber-300 px-3 py-1 text-sm font-semibold text-stone-950">
+      Featured business
+    </span>
+  )}
 
+  {business.is_premium && (
+    <span className="inline-block rounded-full bg-red-300 px-3 py-1 text-sm font-semibold text-stone-950">
+      Premium listing
+    </span>
+  )}
+</div>
                 {averageRating !== null && (
                   <p className="mt-3 text-stone-100">
                     ⭐ {averageRating.toFixed(1)} from {reviews.length} review

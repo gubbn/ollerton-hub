@@ -14,9 +14,6 @@ type Review = {
   review_text: string | null
   is_approved: boolean | null
   created_at: string
-businesses: {
-  business_name: string
-}[] | null
 }
 
 export default function AdminReviewsPage() {
@@ -51,19 +48,9 @@ export default function AdminReviewsPage() {
 
       const { data, error } = await supabase
         .from('reviews')
-        .select(`
-          id,
-          business_id,
-          reviewer_name,
-          reviewer_email,
-          rating,
-          review_text,
-          is_approved,
-          created_at,
-          businesses (
-            business_name
-          )
-        `)
+        .select(
+          'id, business_id, reviewer_name, reviewer_email, rating, review_text, is_approved, created_at'
+        )
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -87,6 +74,8 @@ export default function AdminReviewsPage() {
   }, [reviews, filter])
 
   async function approveReview(reviewId: string) {
+    setError('')
+
     const { error } = await supabase
       .from('reviews')
       .update({ is_approved: true })
@@ -105,6 +94,8 @@ export default function AdminReviewsPage() {
   }
 
   async function unapproveReview(reviewId: string) {
+    setError('')
+
     const { error } = await supabase
       .from('reviews')
       .update({ is_approved: false })
@@ -124,8 +115,9 @@ export default function AdminReviewsPage() {
 
   async function deleteReview(reviewId: string) {
     const confirmed = window.confirm('Delete this review? This cannot be undone.')
-
     if (!confirmed) return
+
+    setError('')
 
     const { error } = await supabase
       .from('reviews')
@@ -160,6 +152,7 @@ export default function AdminReviewsPage() {
             <h1 className="text-3xl font-bold text-gray-900">
               Review Moderation
             </h1>
+
             <p className="mt-2 text-sm text-gray-600">
               Showing {filteredReviews.length} of {reviews.length} reviews.
             </p>
@@ -191,10 +184,14 @@ export default function AdminReviewsPage() {
               <div className="flex flex-wrap justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">
-                    {review.businesses?.[0]?.business_name || 'Unknown business'}
+                    Review for business ID
                   </h2>
 
-                  <p className="mt-1 text-sm text-gray-600">
+                  <p className="mt-1 break-all text-xs text-gray-500">
+                    {review.business_id}
+                  </p>
+
+                  <p className="mt-3 text-sm text-gray-600">
                     {review.reviewer_name || 'Anonymous'} · Rating:{' '}
                     {review.rating || '—'} / 5
                   </p>

@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
-type CategoryRelation = { name: string; slug: string } | { name: string; slug: string }[] | null
+type CategoryRelation =
+  | { name: string; slug: string }
+  | { name: string; slug: string }[]
+  | null
 
 type Business = {
   id: string
@@ -31,11 +35,17 @@ function getCategory(categories: CategoryRelation) {
 }
 
 export default function DirectoryPage() {
+  const searchParams = useSearchParams()
+
+  const initialSearch = searchParams.get('search') || ''
+  const initialCategory = searchParams.get('category') || ''
+  const initialTown = searchParams.get('town') || ''
+
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('')
-  const [town, setTown] = useState('')
+  const [search, setSearch] = useState(initialSearch)
+  const [category, setCategory] = useState(initialCategory)
+  const [town, setTown] = useState(initialTown)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -56,7 +66,7 @@ export default function DirectoryPage() {
             slug
           )
         `)
-        .eq('status', 'approved')
+        .eq('is_approved', true)
         .order('is_featured', { ascending: false })
         .order('business_name')
 
@@ -105,6 +115,12 @@ export default function DirectoryPage() {
     })
   }, [businesses, search, category, town])
 
+  function clearFilters() {
+    setSearch('')
+    setCategory('')
+    setTown('')
+  }
+
   return (
     <main className="min-h-screen bg-stone-100 text-stone-900">
       <section className="bg-stone-900 px-6 py-12 text-white">
@@ -124,13 +140,13 @@ export default function DirectoryPage() {
       <section className="px-6 py-10">
         <div className="mx-auto max-w-6xl">
           <div className="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-stone-200">
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
               <input
                 type="text"
                 placeholder="Search by name, service or description..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none md:col-span-2"
               />
 
               <select
@@ -160,10 +176,19 @@ export default function DirectoryPage() {
               </select>
             </div>
 
-            <p className="mt-4 text-sm text-stone-600">
-              Showing {filteredBusinesses.length} business
-              {filteredBusinesses.length === 1 ? '' : 'es'}
-            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-stone-600">
+                Showing {filteredBusinesses.length} business
+                {filteredBusinesses.length === 1 ? '' : 'es'}
+              </p>
+
+              <button
+                onClick={clearFilters}
+                className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-800"
+              >
+                Clear filters
+              </button>
+            </div>
           </div>
 
           <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">

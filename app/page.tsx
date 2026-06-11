@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import HomeSearch from '@/app/components/HomeSearch'
 
 type Category = {
   id: string
@@ -21,13 +22,33 @@ type Business = {
   categories: CategoryRelation
 }
 
+type SiteSetting = {
+  setting_key: string
+  setting_value: string | null
+}
+
 function getCategoryName(categories: CategoryRelation) {
   if (!categories) return 'Local business'
   if (Array.isArray(categories)) return categories[0]?.name ?? 'Local business'
   return categories.name
 }
 
+function getSetting(
+  settings: SiteSetting[],
+  key: string,
+  fallback: string
+) {
+  return (
+    settings.find((setting) => setting.setting_key === key)?.setting_value ||
+    fallback
+  )
+}
+
 export default async function HomePage() {
+  const { data: settingsData } = await supabase
+    .from('site_settings')
+    .select('setting_key, setting_value')
+
   const { data: categoryData } = await supabase
     .from('categories')
     .select('id, name, slug, description')
@@ -52,15 +73,28 @@ export default async function HomePage() {
     .order('created_at', { ascending: false })
     .limit(6)
 
+  const settings = (settingsData as SiteSetting[] | null) ?? []
   const categories = (categoryData as Category[] | null) ?? []
   const businesses = (businessData as Business[] | null) ?? []
+
+  const siteName = getSetting(settings, 'site_name', 'Ollerton Hub')
+  const homepageIntro = getSetting(
+    settings,
+    'homepage_intro',
+    'Discover local services, shops, trades, food, fitness, technology and more.'
+  )
+  const featuredTitle = getSetting(
+    settings,
+    'featured_title',
+    'Featured local businesses'
+  )
 
   return (
     <main className="min-h-screen bg-stone-100 text-stone-900">
       <section className="bg-stone-900 px-6 py-16 text-white">
         <div className="mx-auto max-w-6xl">
           <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-red-300">
-            Ollerton Local Business Directory
+            {siteName}
           </p>
 
           <h1 className="max-w-3xl text-4xl font-bold tracking-tight md:text-6xl">
@@ -68,7 +102,7 @@ export default async function HomePage() {
           </h1>
 
           <p className="mt-5 max-w-2xl text-lg text-stone-200">
-            Discover local services, shops, trades, food, fitness, technology and more.
+            {homepageIntro}
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -92,20 +126,8 @@ export default async function HomePage() {
       <section className="px-6 py-10">
         <div className="mx-auto max-w-6xl">
           <div className="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-stone-200">
-            <label className="mb-2 block text-sm font-semibold text-stone-700">
-              Search local businesses
-            </label>
-
-            <input
-              type="text"
-              placeholder="Search by name, service or category..."
-              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-            />
-
-            <p className="mt-2 text-sm text-stone-600">
-              Search is available on the directory page.
-            </p>
-          </div>
+  <HomeSearch />
+</div>
         </div>
       </section>
 
@@ -139,7 +161,7 @@ export default async function HomePage() {
         <div className="mx-auto max-w-6xl">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-2xl font-bold text-stone-900">
-              Featured local businesses
+              {featuredTitle}
             </h2>
 
             <Link href="/directory" className="text-sm font-semibold underline">
