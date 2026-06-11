@@ -14,6 +14,7 @@ type Business = {
   is_approved: boolean | null
   is_featured: boolean | null
   is_premium: boolean | null
+  created_at: string
 }
 
 export default function AdminBusinessesPage() {
@@ -30,6 +31,9 @@ export default function AdminBusinessesPage() {
 
   useEffect(() => {
     async function loadBusinesses() {
+      setLoading(true)
+      setError('')
+
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -39,34 +43,43 @@ export default function AdminBusinessesPage() {
         return
       }
 
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('is_admin')
         .eq('id', user.id)
         .single()
+
+      if (profileError) {
+        setError(profileError.message)
+        setLoading(false)
+        return
+      }
 
       if (!profile?.is_admin) {
         router.push('/')
         return
       }
 
-      const { data, error } = await supabase
-  .from('businesses')
-  .select(`
-    id,
-    business_name,
-    slug,
-    town,
-    is_approved,
-    is_featured,
-    created_at
-  `)
-  .order('created_at', { ascending: false })
+      const { data, error: businessesError } = await supabase
+        .from('businesses')
+        .select(`
+          id,
+          business_name,
+          slug,
+          town,
+          status,
+          is_approved,
+          is_featured,
+          is_premium,
+          created_at
+        `)
+        .order('created_at', { ascending: false })
 
-      if (error) {
-        setError(error.message)
+      if (businessesError) {
+        setError(businessesError.message)
+        setBusinesses([])
       } else {
-        setBusinesses(data || [])
+        setBusinesses((data || []) as Business[])
       }
 
       setLoading(false)
@@ -84,10 +97,10 @@ export default function AdminBusinessesPage() {
         statusFilter === 'all'
           ? true
           : statusFilter === 'approved'
-          ? business.is_approved === true
-          : statusFilter === 'pending'
-          ? business.status === 'pending' || business.is_approved === false
-          : business.status === statusFilter
+            ? business.is_approved === true
+            : statusFilter === 'pending'
+              ? business.status === 'pending' || business.is_approved === false || !business.status
+              : business.status === statusFilter
 
       const matchesFeatured = featuredOnly ? business.is_featured === true : true
       const matchesPremium = premiumOnly ? business.is_premium === true : true
@@ -143,6 +156,7 @@ export default function AdminBusinessesPage() {
             </select>
 
             <button
+              type="button"
               onClick={() => {
                 setSearch('')
                 setStatusFilter('all')
