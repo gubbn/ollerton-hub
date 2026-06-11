@@ -34,6 +34,15 @@ function getCategory(categories: CategoryRelation) {
   return categories
 }
 
+function isOtherCategory(category: { name?: string | null; slug?: string | null } | null) {
+  if (!category) return false
+
+  return (
+    category.slug?.toLowerCase() === 'other' ||
+    category.name?.toLowerCase() === 'other'
+  )
+}
+
 function DirectoryContent() {
   const searchParams = useSearchParams()
 
@@ -50,6 +59,8 @@ function DirectoryContent() {
 
   useEffect(() => {
     async function loadDirectory() {
+      setLoading(true)
+
       const { data: businessData } = await supabase
         .from('businesses')
         .select(`
@@ -75,8 +86,12 @@ function DirectoryContent() {
         .select('id, name, slug')
         .order('name')
 
+      const cleanCategories = ((categoryData as Category[] | null) ?? []).filter(
+        (item) => !isOtherCategory(item)
+      )
+
       setBusinesses((businessData as unknown as Business[]) ?? [])
-      setCategories((categoryData as Category[] | null) ?? [])
+      setCategories(cleanCategories)
       setLoading(false)
     }
 
@@ -99,6 +114,10 @@ function DirectoryContent() {
     return businesses.filter((business) => {
       const businessCategory = getCategory(business.categories)
 
+      if (isOtherCategory(businessCategory)) {
+        return false
+      }
+
       const matchesSearch =
         !searchValue ||
         business.business_name.toLowerCase().includes(searchValue) ||
@@ -106,9 +125,7 @@ function DirectoryContent() {
         business.service_area?.toLowerCase().includes(searchValue) ||
         businessCategory?.name.toLowerCase().includes(searchValue)
 
-      const matchesCategory =
-        !category || businessCategory?.slug === category
-
+      const matchesCategory = !category || businessCategory?.slug === category
       const matchesTown = !town || business.town === town
 
       return matchesSearch && matchesCategory && matchesTown

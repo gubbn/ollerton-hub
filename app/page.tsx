@@ -49,10 +49,11 @@ export default async function HomePage() {
     .from('site_settings')
     .select('setting_key, setting_value')
 
-  const { data: categoryData } = await supabase
-    .from('categories')
-    .select('id, name, slug, description')
-    .order('name')
+const { data: categoryData } = await supabase
+  .from('categories')
+  .select('id, name, slug, description')
+  .neq('slug', 'other')
+  .order('name')
 
   const { data: businessData } = await supabase
     .from('businesses')
@@ -74,7 +75,11 @@ export default async function HomePage() {
     .limit(6)
 
   const settings = (settingsData as SiteSetting[] | null) ?? []
-  const categories = (categoryData as Category[] | null) ?? []
+const categories = ((categoryData as Category[] | null) ?? []).filter(
+  (category) =>
+    category.slug.toLowerCase() !== 'other' &&
+    category.name.toLowerCase() !== 'other'
+)
   const businesses = (businessData as Business[] | null) ?? []
 
   const siteName = getSetting(settings, 'site_name', 'Ollerton Hub')
