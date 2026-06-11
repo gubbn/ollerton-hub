@@ -11,6 +11,7 @@ type CategoryRelation = { name: string } | { name: string }[] | null
 type Business = {
   id: string
   business_name: string
+  slug: string
   description: string | null
   services: string | null
   phone: string | null
@@ -58,6 +59,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
     .select(`
       id,
       business_name,
+      slug,
       description,
       services,
       phone,
@@ -113,7 +115,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               {getCategoryName(business.categories)}
             </p>
 
-            <div className="mt-4 flex items-center gap-5">
+            <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
               {business.logo_url ? (
                 <img
                   src={business.logo_url}
@@ -127,21 +129,18 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               )}
 
               <div>
-                <h1 className="text-4xl font-bold">{business.business_name}</h1>
+                <h1 className="text-4xl font-bold">
+                  {business.business_name}
+                </h1>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-  {business.is_featured && (
-    <span className="inline-block rounded-full bg-amber-300 px-3 py-1 text-sm font-semibold text-stone-950">
-      Featured business
-    </span>
-  )}
+                  {business.is_featured && (
+                    <span className="inline-block rounded-full bg-red-600 px-3 py-1 text-sm font-semibold text-white">
+                      Featured listing
+                    </span>
+                  )}
+                </div>
 
-  {business.is_premium && (
-    <span className="inline-block rounded-full bg-red-300 px-3 py-1 text-sm font-semibold text-stone-950">
-      Premium listing
-    </span>
-  )}
-</div>
                 {averageRating !== null && (
                   <p className="mt-3 text-stone-100">
                     ⭐ {averageRating.toFixed(1)} from {reviews.length} review
@@ -294,9 +293,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 {!business.address_line_1 &&
                   !business.address_line_2 &&
                   !business.town &&
-                  !business.postcode && (
-                    <p>No address added yet.</p>
-                  )}
+                  !business.postcode && <p>No address added yet.</p>}
 
                 {business.service_area && (
                   <p className="mt-4">
@@ -306,13 +303,13 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 )}
 
                 <div className="mt-8 border-t pt-4">
-  <Link
-    href={`/contact?subject=Report Listing&business=${business.slug}`}
-    className="text-sm text-red-600 hover:text-red-700 hover:underline"
-  >
-    Report this listing
-  </Link>
-</div>
+                  <Link
+                    href={`/contact?subject=Report Listing&business=${business.slug}`}
+                    className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline"
+                  >
+                    Report this listing
+                  </Link>
+                </div>
               </div>
             </div>
           </aside>
