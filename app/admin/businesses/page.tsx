@@ -51,11 +51,17 @@ export default function AdminBusinessesPage() {
       }
 
       const { data, error } = await supabase
-        .from('businesses')
-        .select(
-          'id, business_name, slug, town, status, is_approved, is_featured, is_premium'
-        )
-        .order('created_at', { ascending: false })
+  .from('businesses')
+  .select(`
+    id,
+    business_name,
+    slug,
+    town,
+    is_approved,
+    is_featured,
+    created_at
+  `)
+  .order('created_at', { ascending: false })
 
       if (error) {
         setError(error.message)

@@ -1,101 +1,159 @@
 'use client'
 
-import { useState } from 'react'
+import { FormEvent, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 
 export default function RegisterPage() {
-  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [message, setMessage] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
 
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
     setLoading(true)
     setMessage('')
+    setError('')
 
-    const { error } = await supabase.auth.signUp({
-      email,
+    if (!email.trim()) {
+      setError('Please enter your email address.')
+      setLoading(false)
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.')
+      setLoading(false)
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      setLoading(false)
+      return
+    }
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: email.trim(),
       password,
       options: {
-        data: {
-          full_name: fullName,
-        },
+        emailRedirectTo: `${window.location.origin}/login`,
       },
     })
 
+    console.log('Signup data:', data)
+    console.log('Signup error:', signUpError)
+
+    if (signUpError) {
+      setError(signUpError.message || JSON.stringify(signUpError))
+      setLoading(false)
+      return
+    }
+
     setMessage(
-      error
-        ? error.message
-        : 'Account created. Please check your email to confirm your sign up.'
+      'Account created. Please check your email to confirm your account.'
     )
 
+    setEmail('')
+    setPassword('')
+    setConfirmPassword('')
     setLoading(false)
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-6 py-12 text-stone-900">
+    <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
       <div className="mx-auto max-w-md">
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-red-700">Ollerton Connect</h1>
-          <p className="mt-2 text-stone-700">
-            Helping local businesses connect with local customers
-          </p>
-        </div>
+        <Link href="/" className="text-sm text-red-700 underline">
+          ← Back to home
+        </Link>
 
-        <div className="rounded-3xl bg-white p-8 shadow-lg ring-1 ring-stone-200">
-          <h2 className="text-3xl font-bold text-stone-900">
-            Create your account
-          </h2>
+        <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
+          <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
+            Business account
+          </p>
+
+          <h1 className="mt-2 text-3xl font-bold">
+            Create your Ollerton Hub account
+          </h1>
+
+          <p className="mt-3 text-sm text-stone-600">
+            Register to create and manage your business listing.
+          </p>
 
           <form onSubmit={handleRegister} className="mt-6 space-y-4">
-            <input
-              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-              placeholder="Your name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-            />
+            <div>
+              <label className="text-sm font-semibold">Email address</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email"
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+                placeholder="you@example.com"
+              />
+            </div>
 
-            <input
-              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-              placeholder="Email address"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <div>
+              <label className="text-sm font-semibold">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="new-password"
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+                placeholder="Minimum 6 characters"
+              />
+            </div>
 
-            <input
-              className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-              placeholder="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div>
+              <label className="text-sm font-semibold">
+                Confirm password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                autoComplete="new-password"
+                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+                placeholder="Re-enter your password"
+              />
+            </div>
+
+            {error && (
+              <p className="rounded-xl bg-red-50 p-4 text-sm font-medium text-red-700">
+                {error}
+              </p>
+            )}
+
+            {message && (
+              <p className="rounded-xl bg-green-50 p-4 text-sm font-medium text-green-700">
+                {message}
+              </p>
+            )}
 
             <button
+              type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-red-700 px-4 py-3 font-semibold text-white hover:bg-red-800 disabled:opacity-60"
+              className="w-full rounded-xl bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
             >
-              {loading ? 'Creating account...' : 'Register'}
+              {loading ? 'Creating account...' : 'Create account'}
             </button>
           </form>
 
-          {message && <p className="mt-4 text-sm text-stone-700">{message}</p>}
-
-          <p className="mt-6 text-sm text-stone-700">
+          <p className="mt-6 text-center text-sm text-stone-600">
             Already have an account?{' '}
             <Link
               href="/login"
-              className="font-semibold text-stone-900 underline hover:text-stone-700"
+              className="font-semibold text-red-700 hover:underline"
             >
               Sign in
             </Link>
           </p>
-        </div>
+        </section>
       </div>
     </main>
   )

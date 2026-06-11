@@ -48,6 +48,10 @@ function cleanWebsiteUrl(url: string) {
   return url.startsWith('http') ? url : `https://${url}`
 }
 
+function cleanPhoneNumber(phone: string) {
+  return phone.replace(/\s+/g, '')
+}
+
 function displayWebsiteUrl(url: string) {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
@@ -223,7 +227,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                     <BusinessStatTracker
                       businessId={business.id}
                       eventType="phone_click"
-                      href={`tel:${business.phone}`}
+                      href={`tel:${cleanPhoneNumber(business.phone)}`}
                       className="underline"
                     >
                       {business.phone}

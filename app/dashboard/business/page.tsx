@@ -33,10 +33,6 @@ type Business = {
   is_featured: boolean
 }
 
-type BusinessStat = {
-  event_type: string
-}
-
 const emptyBusiness: Business = {
   id: '',
   business_name: '',
@@ -69,24 +65,6 @@ function makeSlug(value: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-function StatCard({
-  label,
-  value,
-  icon,
-}: {
-  label: string
-  value: number
-  icon: string
-}) {
-  return (
-    <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
-      <div className="text-2xl">{icon}</div>
-      <p className="mt-3 text-sm font-medium text-stone-500">{label}</p>
-      <p className="mt-1 text-3xl font-bold text-stone-900">{value}</p>
-    </div>
-  )
-}
-
 export default function DashboardBusinessPage() {
   const router = useRouter()
 
@@ -98,15 +76,6 @@ export default function DashboardBusinessPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [business, setBusiness] = useState<Business>(emptyBusiness)
-
-  const [stats, setStats] = useState({
-    profile_view: 0,
-    website_click: 0,
-    phone_click: 0,
-    email_click: 0,
-    facebook_click: 0,
-    instagram_click: 0,
-  })
 
   const publicListingUrl = useMemo(() => {
     if (!business.slug) return null
@@ -173,38 +142,10 @@ export default function DashboardBusinessPage() {
     }
 
     if (businessData) {
-      const loadedBusiness = businessData as Business
-      setBusiness(loadedBusiness)
-      await loadStats(loadedBusiness.id)
+      setBusiness(businessData as Business)
     }
 
     setLoading(false)
-  }
-
-  async function loadStats(businessId: string) {
-    const { data } = await supabase
-      .from('business_stats')
-      .select('event_type')
-      .eq('business_id', businessId)
-
-    const statsData = (data as BusinessStat[] | null) ?? []
-
-    const nextStats = {
-      profile_view: 0,
-      website_click: 0,
-      phone_click: 0,
-      email_click: 0,
-      facebook_click: 0,
-      instagram_click: 0,
-    }
-
-    statsData.forEach((item) => {
-      if (item.event_type in nextStats) {
-        nextStats[item.event_type as keyof typeof nextStats] += 1
-      }
-    })
-
-    setStats(nextStats)
   }
 
   function updateField(field: keyof Business, value: string) {
@@ -324,128 +265,66 @@ export default function DashboardBusinessPage() {
 
   return (
     <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
-      <div className="mx-auto max-w-5xl space-y-8">
-        <div>
-          <Link href="/dashboard" className="text-sm text-red-700 underline">
-            ← Back to dashboard
-          </Link>
-
-          <div className="mt-6 rounded-3xl bg-stone-900 p-6 text-white">
-            <p className="text-sm font-semibold uppercase tracking-wide text-red-300">
-              Business owner area
-            </p>
-
-            <h1 className="mt-2 text-3xl font-bold">
-              Manage your business listing
-            </h1>
-
-            <p className="mt-3 max-w-2xl text-stone-200">
-              Update your public profile, contact details, opening times and
-              logo.
-            </p>
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              {publicListingUrl && business.is_approved && (
-                <Link
-                  href={publicListingUrl}
-                  className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
-                >
-                  View public listing
-                </Link>
-              )}
-
-              {!business.is_approved && business.id && (
-                <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
-                  Awaiting approval
-                </span>
-              )}
-
-              {business.is_featured && (
-                <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
-                  Featured listing
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-{business.id && (
-  <section className="rounded-2xl bg-stone-50 p-4 ring-1 ring-stone-200">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-          Listing performance
-        </p>
-
-        <h2 className="mt-1 text-lg font-bold text-stone-900">
-          How your listing is doing
-        </h2>
-      </div>
-
-      {publicListingUrl && (
-        <Link
-          href={publicListingUrl}
-          className="text-sm font-medium text-red-700 hover:underline"
-        >
-          View public listing →
+      <div className="mx-auto max-w-5xl space-y-6">
+        <Link href="/dashboard" className="text-sm text-red-700 underline">
+          ← Back to dashboard
         </Link>
-      )}
-    </div>
 
-    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
-        <p className="text-2xl font-bold">{stats.profile_view}</p>
-        <p className="mt-1 text-xs text-stone-500">Views</p>
-      </div>
+        <section className="rounded-3xl bg-stone-900 p-6 text-white">
+          <p className="text-sm font-semibold uppercase tracking-wide text-red-300">
+            Business owner area
+          </p>
 
-      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
-        <p className="text-2xl font-bold">{stats.website_click}</p>
-        <p className="mt-1 text-xs text-stone-500">Website</p>
-      </div>
+          <h1 className="mt-2 text-3xl font-bold">
+            Manage your business listing
+          </h1>
 
-      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
-        <p className="text-2xl font-bold">{stats.phone_click}</p>
-        <p className="mt-1 text-xs text-stone-500">Calls</p>
-      </div>
+          <p className="mt-3 max-w-2xl text-stone-200">
+            Update your profile, contact details, logo, address and opening
+            times.
+          </p>
 
-      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
-        <p className="text-2xl font-bold">{stats.email_click}</p>
-        <p className="mt-1 text-xs text-stone-500">Emails</p>
-      </div>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {publicListingUrl && business.is_approved && (
+              <Link
+                href={publicListingUrl}
+                className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+              >
+                View public listing
+              </Link>
+            )}
 
-      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
-        <p className="text-2xl font-bold">{stats.facebook_click}</p>
-        <p className="mt-1 text-xs text-stone-500">Facebook</p>
-      </div>
+            {!business.is_approved && business.id && (
+              <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+                Awaiting approval
+              </span>
+            )}
 
-      <div className="rounded-xl bg-white px-3 py-4 text-center ring-1 ring-stone-200">
-        <p className="text-2xl font-bold">{stats.instagram_click}</p>
-        <p className="mt-1 text-xs text-stone-500">Instagram</p>
-      </div>
-    </div>
-  </section>
-)}
+            {business.is_featured && (
+              <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
+                Featured listing
+              </span>
+            )}
+          </div>
+        </section>
+
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <label className="text-sm font-semibold">Business name</label>
-              <input
-                value={business.business_name}
-                onChange={(event) =>
-                  updateField('business_name', event.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+          <h2 className="text-xl font-bold text-stone-900">
+            Business details
+          </h2>
 
-            <div>
-              <label className="text-sm font-semibold">Slug</label>
-              <input
-                value={business.slug}
-                onChange={(event) => updateField('slug', makeSlug(event.target.value))}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+          <div className="mt-6 grid gap-5 md:grid-cols-2">
+            <FormInput
+              label="Business name"
+              value={business.business_name}
+              onChange={(value) => updateField('business_name', value)}
+            />
+
+            <FormInput
+              label="Slug"
+              value={business.slug}
+              onChange={(value) => updateField('slug', makeSlug(value))}
+            />
 
             <div>
               <label className="text-sm font-semibold">Category</label>
@@ -490,140 +369,87 @@ export default function DashboardBusinessPage() {
               )}
             </div>
 
-            <div className="md:col-span-2">
-              <label className="text-sm font-semibold">Description</label>
-              <textarea
-                value={business.description ?? ''}
-                onChange={(event) =>
-                  updateField('description', event.target.value)
-                }
-                rows={5}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormTextarea
+              label="Description"
+              value={business.description ?? ''}
+              onChange={(value) => updateField('description', value)}
+            />
 
-            <div className="md:col-span-2">
-              <label className="text-sm font-semibold">Services</label>
-              <textarea
-                value={business.services ?? ''}
-                onChange={(event) => updateField('services', event.target.value)}
-                rows={5}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormTextarea
+              label="Services"
+              value={business.services ?? ''}
+              onChange={(value) => updateField('services', value)}
+            />
 
-            <div>
-              <label className="text-sm font-semibold">Phone</label>
-              <input
-                value={business.phone ?? ''}
-                onChange={(event) => updateField('phone', event.target.value)}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Phone"
+              value={business.phone ?? ''}
+              onChange={(value) => updateField('phone', value)}
+            />
 
-            <div>
-              <label className="text-sm font-semibold">Email</label>
-              <input
-                value={business.email ?? ''}
-                onChange={(event) => updateField('email', event.target.value)}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Email"
+              value={business.email ?? ''}
+              onChange={(value) => updateField('email', value)}
+            />
 
-            <div>
-              <label className="text-sm font-semibold">Website</label>
-              <input
-                value={business.website ?? ''}
-                onChange={(event) => updateField('website', event.target.value)}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Website"
+              value={business.website ?? ''}
+              onChange={(value) => updateField('website', value)}
+            />
 
-            <div>
-              <label className="text-sm font-semibold">Facebook</label>
-              <input
-                value={business.facebook ?? ''}
-                onChange={(event) => updateField('facebook', event.target.value)}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Facebook"
+              value={business.facebook ?? ''}
+              onChange={(value) => updateField('facebook', value)}
+            />
 
-            <div>
-              <label className="text-sm font-semibold">Instagram</label>
-              <input
-                value={business.instagram ?? ''}
-                onChange={(event) =>
-                  updateField('instagram', event.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Instagram"
+              value={business.instagram ?? ''}
+              onChange={(value) => updateField('instagram', value)}
+            />
 
-            <div>
-              <label className="text-sm font-semibold">Address line 1</label>
-              <input
-                value={business.address_line_1 ?? ''}
-                onChange={(event) =>
-                  updateField('address_line_1', event.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Address line 1"
+              value={business.address_line_1 ?? ''}
+              onChange={(value) => updateField('address_line_1', value)}
+            />
 
-            <div>
-              <label className="text-sm font-semibold">Address line 2</label>
-              <input
-                value={business.address_line_2 ?? ''}
-                onChange={(event) =>
-                  updateField('address_line_2', event.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Address line 2"
+              value={business.address_line_2 ?? ''}
+              onChange={(value) => updateField('address_line_2', value)}
+            />
 
-            <div>
-              <label className="text-sm font-semibold">Town</label>
-              <input
-                value={business.town ?? ''}
-                onChange={(event) => updateField('town', event.target.value)}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Town"
+              value={business.town ?? ''}
+              onChange={(value) => updateField('town', value)}
+            />
 
-            <div>
-              <label className="text-sm font-semibold">Postcode</label>
-              <input
-                value={business.postcode ?? ''}
-                onChange={(event) => updateField('postcode', event.target.value)}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Postcode"
+              value={business.postcode ?? ''}
+              onChange={(value) => updateField('postcode', value)}
+            />
 
-            <div className="md:col-span-2">
-              <label className="text-sm font-semibold">Service area</label>
-              <input
-                value={business.service_area ?? ''}
-                onChange={(event) =>
-                  updateField('service_area', event.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-              />
-            </div>
+            <FormInput
+              label="Service area"
+              value={business.service_area ?? ''}
+              onChange={(value) => updateField('service_area', value)}
+              fullWidth
+            />
 
-            <div className="md:col-span-2">
-              <label className="text-sm font-semibold">Opening times</label>
-              <textarea
-                value={business.opening_times ?? ''}
-                onChange={(event) =>
-                  updateField('opening_times', event.target.value)
-                }
-                rows={5}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-                placeholder={`Monday: 9am - 5pm
+            <FormTextarea
+              label="Opening times"
+              value={business.opening_times ?? ''}
+              onChange={(value) => updateField('opening_times', value)}
+              placeholder={`Monday: 9am - 5pm
 Tuesday: 9am - 5pm
 Wednesday: 9am - 5pm`}
-              />
-            </div>
+            />
           </div>
 
           {error && (
@@ -650,5 +476,53 @@ Wednesday: 9am - 5pm`}
         </section>
       </div>
     </main>
+  )
+}
+
+function FormInput({
+  label,
+  value,
+  onChange,
+  fullWidth = false,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  fullWidth?: boolean
+}) {
+  return (
+    <div className={fullWidth ? 'md:col-span-2' : ''}>
+      <label className="text-sm font-semibold">{label}</label>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+      />
+    </div>
+  )
+}
+
+function FormTextarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  return (
+    <div className="md:col-span-2">
+      <label className="text-sm font-semibold">{label}</label>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={5}
+        placeholder={placeholder}
+        className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+      />
+    </div>
   )
 }
