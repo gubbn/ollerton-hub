@@ -1,25 +1,32 @@
-export default function TermsPage() {
+export default function PrivacyPage() {
   return (
-    <main className="max-w-4xl mx-auto px-4 py-10">
-      <h1 className="text-4xl font-bold mb-6">Terms of Use</h1>
+    <main className="min-h-screen bg-stone-100 px-4 py-10">
+      <div className="mx-auto max-w-5xl">
+        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200 md:p-10">
+          <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-red-600">
+            Terms of Use
+          </p>
 
-      <p className="mb-6 text-gray-700">
-        Last updated: 11 June 2026
-      </p>
+          <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-stone-900">
+            Terms of Use
+          </h1>
 
-      <div className="space-y-8 text-gray-700">
+          <p className="mb-8 text-sm text-stone-500">
+            Last updated: 11 June 2026
+          </p>
 
-        <section>
-          <h2 className="text-2xl font-semibold mb-2">
-            1. About Ollerton Hub
-          </h2>
-
-          <p>
+          <div className="space-y-8 text-stone-700">
+            <section>
+              <h2 className="text-2xl font-bold text-stone-900">
+                1. About this policy
+              </h2>
+              <p className="mt-3">
             Ollerton Hub is a community business directory designed to connect
             local residents with businesses, organisations and services
             operating within Ollerton and the surrounding areas.
-          </p>
-        </section>
+                us.
+              </p>
+            </section>
 
         <section>
           <h2 className="text-2xl font-semibold mb-2">
@@ -112,7 +119,8 @@ export default function TermsPage() {
             effective once published on this page.
           </p>
         </section>
-
+          </div>
+        </section>
       </div>
     </main>
   )

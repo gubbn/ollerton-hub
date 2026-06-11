@@ -1,18 +1,17 @@
-export default function PrivacyPage() {
+export default function CookiesPage() {
   return (
-    <main className="min-h-screen bg-stone-100 px-4 py-10">
-      <div className="mx-auto max-w-5xl">
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200 md:p-10">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-red-600">
-            Privacy
-          </p>
+    <main className="max-w-4xl mx-auto px-4 py-10">
+      <h1 className="text-4xl font-bold mb-6">Cookie Policy</h1>
 
-          <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-stone-900">
-            Terms of Use
-          </h1>
+      <p className="mb-6 text-gray-700">
+        Last updated: 11 June 2026
+      </p>
 
-          <p className="mb-8 text-sm text-stone-500">
-  Cookies are small text files stored on your device when you visit a
+      <div className="space-y-8 text-gray-700">
+        <section>
+          <h2 className="text-2xl font-semibold mb-2">1. About cookies</h2>
+          <p>
+            Cookies are small text files stored on your device when you visit a
             website. They help websites work properly, remember preferences and
             understand how people use the site.
           </p>
