@@ -17,6 +17,12 @@ type Business = {
   created_at: string
 }
 
+function getBusinessStatus(business: Business) {
+  if (business.status === 'rejected') return 'rejected'
+  if (business.is_approved === true) return 'approved'
+  return 'pending'
+}
+
 export default function AdminBusinessesPage() {
   const router = useRouter()
 
@@ -93,14 +99,10 @@ export default function AdminBusinessesPage() {
       const searchText = `${business.business_name} ${business.town || ''}`.toLowerCase()
       const matchesSearch = searchText.includes(search.toLowerCase())
 
+      const currentStatus = getBusinessStatus(business)
+
       const matchesStatus =
-        statusFilter === 'all'
-          ? true
-          : statusFilter === 'approved'
-            ? business.is_approved === true
-            : statusFilter === 'pending'
-              ? business.status === 'pending' || business.is_approved === false || !business.status
-              : business.status === statusFilter
+        statusFilter === 'all' ? true : currentStatus === statusFilter
 
       const matchesFeatured = featuredOnly ? business.is_featured === true : true
       const matchesPremium = premiumOnly ? business.is_premium === true : true
@@ -124,15 +126,13 @@ export default function AdminBusinessesPage() {
           ← Back to admin
         </Link>
 
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Manage Businesses
-            </h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Showing {filteredBusinesses.length} of {businesses.length} businesses.
-            </p>
-          </div>
+        <div className="mt-4">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Manage Businesses
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Showing {filteredBusinesses.length} of {businesses.length} businesses.
+          </p>
         </div>
 
         <div className="mt-6 rounded-2xl bg-white p-4 shadow">
@@ -221,9 +221,7 @@ export default function AdminBusinessesPage() {
                   </td>
 
                   <td className="p-4 text-gray-700">
-                    {business.is_approved
-                      ? 'approved'
-                      : business.status || 'pending'}
+                    {getBusinessStatus(business)}
                   </td>
 
                   <td className="p-4 text-gray-700">

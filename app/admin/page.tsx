@@ -1,32 +1,38 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
-type Stats = {
-  total: number
-  pending: number
-  approved: number
-  featured: number
-  premium: number
+type Business = {
+  id: string
+  business_name: string
+  status: string | null
+  is_approved: boolean | null
+  is_featured: boolean | null
+  is_premium: boolean | null
+  created_at: string
+}
+
+function getBusinessStatus(business: Business) {
+  if (business.status === 'rejected') return 'rejected'
+  if (business.is_approved === true) return 'approved'
+  return 'pending'
 }
 
 export default function AdminPage() {
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState<Stats>({
-    total: 0,
-    pending: 0,
-    approved: 0,
-    featured: 0,
-    premium: 0,
-  })
+  const [businesses, setBusinesses] = useState<Business[]>([])
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    async function loadAdmin() {
+    async function loadAdminData() {
+      setLoading(true)
+      setError('')
+
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -36,150 +42,176 @@ export default function AdminPage() {
         return
       }
 
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('is_admin')
         .eq('id', user.id)
         .single()
+
+      if (profileError) {
+        setError(profileError.message)
+        setLoading(false)
+        return
+      }
 
       if (!profile?.is_admin) {
         router.push('/')
         return
       }
 
-      const { count: total } = await supabase
+      const { data, error: businessesError } = await supabase
         .from('businesses')
-        .select('*', { count: 'exact', head: true })
+        .select(`
+          id,
+          business_name,
+          status,
+          is_approved,
+          is_featured,
+          is_premium,
+          created_at
+        `)
+        .order('created_at', { ascending: false })
 
-      const { count: pending } = await supabase
-        .from('businesses')
-        .select('*', { count: 'exact', head: true })
-        .or('status.eq.pending,is_approved.eq.false')
-
-      const { count: approved } = await supabase
-        .from('businesses')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_approved', true)
-
-      const { count: featured } = await supabase
-        .from('businesses')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_featured', true)
-
-      const { count: premium } = await supabase
-        .from('businesses')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_premium', true)
-
-      setStats({
-        total: total || 0,
-        pending: pending || 0,
-        approved: approved || 0,
-        featured: featured || 0,
-        premium: premium || 0,
-      })
+      if (businessesError) {
+        setError(businessesError.message)
+        setBusinesses([])
+      } else {
+        setBusinesses((data || []) as Business[])
+      }
 
       setLoading(false)
     }
 
-    loadAdmin()
+    loadAdminData()
   }, [router])
+
+  const stats = useMemo(() => {
+    const pending = businesses.filter(
+      (business) => getBusinessStatus(business) === 'pending'
+    )
+
+    const approved = businesses.filter(
+      (business) => getBusinessStatus(business) === 'approved'
+    )
+
+    const rejected = businesses.filter(
+      (business) => getBusinessStatus(business) === 'rejected'
+    )
+
+    const featured = businesses.filter(
+      (business) => business.is_featured === true
+    )
+
+    const premium = businesses.filter(
+      (business) => business.is_premium === true
+    )
+
+    return {
+      total: businesses.length,
+      pending: pending.length,
+      approved: approved.length,
+      rejected: rejected.length,
+      featured: featured.length,
+      premium: premium.length,
+    }
+  }, [businesses])
+
+  const recentBusinesses = businesses.slice(0, 5)
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-50 p-6">
-        <p className="text-gray-700">Loading admin...</p>
+      <main className="min-h-screen bg-gray-50 px-6 py-10">
+        <p className="text-gray-700">Loading admin dashboard...</p>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <section className="mx-auto max-w-6xl px-6 py-10">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Admin Dashboard
-        </h1>
+    <main className="min-h-screen bg-gray-50 px-6 py-10">
+      <section className="mx-auto max-w-6xl">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Manage business submissions, approvals and directory visibility.
+          </p>
+        </div>
 
-        <p className="mt-2 text-gray-600">
-          Manage approvals, listings and site content.
-        </p>
+        {error && (
+          <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </p>
+        )}
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard label="Total businesses" value={stats.total} />
-          <StatCard label="Pending" value={stats.pending} highlight />
+          <StatCard label="Pending" value={stats.pending} />
           <StatCard label="Approved" value={stats.approved} />
+          <StatCard label="Rejected" value={stats.rejected} />
           <StatCard label="Featured" value={stats.featured} />
           <StatCard label="Premium" value={stats.premium} />
         </div>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
           <Link
             href="/admin/businesses"
             className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
           >
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-bold text-gray-900">
               Manage Businesses
             </h2>
             <p className="mt-2 text-sm text-gray-600">
-              Approve, edit, feature and delete listings.
+              Approve, reject, feature or manage premium listings.
             </p>
           </Link>
 
           <Link
-            href="/directory"
+            href="/"
             className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
           >
-            <h2 className="text-xl font-semibold text-gray-900">
-              View Directory
+            <h2 className="text-xl font-bold text-gray-900">
+              View Public Site
             </h2>
             <p className="mt-2 text-sm text-gray-600">
-              Open the public business directory.
+              Return to the live directory homepage.
             </p>
           </Link>
-          <Link
-  href="/admin/reviews"
-  className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
->
-  <h2 className="text-xl font-semibold text-gray-900">
-    Manage Reviews
-  </h2>
-  <p className="mt-2 text-sm text-gray-600">
-    Approve, unapprove and delete reviews.
-  </p>
-</Link>
-<Link
-  href="/admin/categories"
-  className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
->
-  <h2 className="text-xl font-semibold text-gray-900">
-    Categories
-  </h2>
-  <p className="mt-2 text-sm text-gray-600">
-    Add, edit and remove directory categories.
-  </p>
-</Link>
-<Link
-  href="/admin/settings"
-  className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
->
-  <h2 className="text-xl font-semibold text-gray-900">
-    Site Settings
-  </h2>
-  <p className="mt-2 text-sm text-gray-600">
-    Edit global wording and approval settings.
-  </p>
-</Link>
-<Link
-  href="/admin/category-suggestions"
-  className="rounded-2xl bg-white p-6 shadow hover:shadow-md"
->
-  <h2 className="text-xl font-semibold text-gray-900">
-    Category Suggestions
-  </h2>
-  <p className="mt-2 text-sm text-gray-600">
-    Review and approve suggested new categories.
-  </p>
-</Link>
+        </div>
+
+        <div className="mt-8 rounded-2xl bg-white p-6 shadow">
+          <h2 className="text-xl font-bold text-gray-900">
+            Recent businesses
+          </h2>
+
+          <div className="mt-4 space-y-3">
+            {recentBusinesses.map((business) => (
+              <div
+                key={business.id}
+                className="flex items-center justify-between rounded-lg border p-4"
+              >
+                <div>
+                  <p className="font-medium text-gray-900">
+                    {business.business_name}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Status: {getBusinessStatus(business)}
+                  </p>
+                </div>
+
+                <Link
+                  href={`/admin/businesses/${business.id}`}
+                  className="text-sm font-medium text-red-700 hover:underline"
+                >
+                  Manage
+                </Link>
+              </div>
+            ))}
+
+            {recentBusinesses.length === 0 && (
+              <p className="text-sm text-gray-500">
+                No businesses have been submitted yet.
+              </p>
+            )}
+          </div>
         </div>
       </section>
     </main>
@@ -189,22 +221,63 @@ export default function AdminPage() {
 function StatCard({
   label,
   value,
-  highlight = false,
 }: {
   label: string
   value: number
-  highlight?: boolean
 }) {
+  const styles: Record<
+    string,
+    {
+      border: string
+      text: string
+      value: string
+    }
+  > = {
+    Pending: {
+      border: 'border-amber-200',
+      text: 'text-amber-700',
+      value: 'text-amber-800',
+    },
+    Approved: {
+      border: 'border-green-200',
+      text: 'text-green-700',
+      value: 'text-green-800',
+    },
+    Rejected: {
+      border: 'border-red-200',
+      text: 'text-red-700',
+      value: 'text-red-800',
+    },
+    Featured: {
+      border: 'border-blue-200',
+      text: 'text-blue-700',
+      value: 'text-blue-800',
+    },
+    Premium: {
+      border: 'border-purple-200',
+      text: 'text-purple-700',
+      value: 'text-purple-800',
+    },
+    'Total businesses': {
+      border: 'border-gray-200',
+      text: 'text-gray-700',
+      value: 'text-gray-900',
+    },
+  }
+
+  const style = styles[label] || styles['Total businesses']
+
   return (
     <div
-      className={`rounded-2xl p-5 shadow ${
-        highlight ? 'bg-green-700 text-white' : 'bg-white text-gray-900'
-      }`}
+      className={`rounded-xl border ${style.border} bg-white px-4 py-3 shadow-sm`}
     >
-      <p className={highlight ? 'text-sm text-red-100' : 'text-sm text-gray-500'}>
+      <p className={`text-xs font-medium uppercase tracking-wide ${style.text}`}>
         {label}
       </p>
-      <p className="mt-2 text-3xl font-bold">{value}</p>
+
+      <p className={`mt-1 text-2xl font-bold ${style.value}`}>
+        {value}
+      </p>
     </div>
   )
 }
