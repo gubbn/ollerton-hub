@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -34,7 +34,7 @@ function getCategory(categories: CategoryRelation) {
   return categories
 }
 
-export default function DirectoryPage() {
+function DirectoryContent() {
   const searchParams = useSearchParams()
 
   const initialSearch = searchParams.get('search') || ''
@@ -145,13 +145,13 @@ export default function DirectoryPage() {
                 type="text"
                 placeholder="Search by name, service or description..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(event) => setSearch(event.target.value)}
                 className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none md:col-span-2"
               />
 
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(event) => setCategory(event.target.value)}
                 className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 focus:border-stone-900 focus:outline-none"
               >
                 <option value="">All categories</option>
@@ -164,7 +164,7 @@ export default function DirectoryPage() {
 
               <select
                 value={town}
-                onChange={(e) => setTown(e.target.value)}
+                onChange={(event) => setTown(event.target.value)}
                 className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 focus:border-stone-900 focus:outline-none"
               >
                 <option value="">All towns</option>
@@ -183,6 +183,7 @@ export default function DirectoryPage() {
               </p>
 
               <button
+                type="button"
                 onClick={clearFilters}
                 className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-800"
               >
@@ -260,5 +261,13 @@ export default function DirectoryPage() {
         </div>
       </section>
     </main>
+  )
+}
+
+export default function DirectoryPage() {
+  return (
+    <Suspense fallback={null}>
+      <DirectoryContent />
+    </Suspense>
   )
 }

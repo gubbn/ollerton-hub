@@ -1,10 +1,11 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-const contactEmail = 'ngubb@fixingit.tech'
+const contactEmail = 'hello@ollertonhub.co.uk'
 
-export default function ContactPage() {
+function ContactContent() {
   const searchParams = useSearchParams()
 
   const subjectParam = searchParams.get('subject') ?? 'Ollerton Hub enquiry'
@@ -68,10 +69,26 @@ Details:
               Email Ollerton Hub
             </a>
 
-
+            <p className="mt-5 text-sm text-stone-600">
+              Or email us directly at{' '}
+              <a
+                href={`mailto:${contactEmail}`}
+                className="font-semibold text-red-600 hover:underline"
+              >
+                {contactEmail}
+              </a>
+            </p>
           </div>
         </section>
       </div>
     </main>
+  )
+}
+
+export default function ContactPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContactContent />
+    </Suspense>
   )
 }
