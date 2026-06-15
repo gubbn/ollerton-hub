@@ -10,20 +10,26 @@ export default function AboutPage() {
           </p>
 
           <h1 className="mb-4 text-3xl font-bold tracking-tight text-stone-950 sm:text-4xl">
-            Helping local businesses get found
+            Helping local businesses and useful places get found
           </h1>
 
           <p className="max-w-3xl text-lg leading-8 text-stone-700">
-            Ollerton Hub is a public directory for businesses in Ollerton and
-            the surrounding villages. It gives local businesses a simple place
-            to share their name, contact details, services, opening times and
-            website links.
+            Ollerton Hub is a public directory for businesses, local services
+            and useful amenities in Ollerton and the surrounding villages. It
+            gives local businesses a simple place to share their name, contact
+            details, services, opening times and website links.
           </p>
 
           <p className="mt-4 max-w-3xl leading-7 text-stone-700">
-            Standard listings are free for everyone. Businesses that want more
-            visibility can choose a Featured or Premium listing, and local
-            adverts can also be placed on selected pages.
+            Standard business listings are free for everyone. Businesses that
+            want more visibility can choose a Featured or Premium listing, and
+            local adverts can also be placed on selected pages.
+          </p>
+
+          <p className="mt-4 max-w-3xl leading-7 text-stone-700">
+            We also include useful local amenities such as schools, places of
+            worship, recycling centres, community venues and public information
+            so residents can find helpful local details in one place.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -39,6 +45,13 @@ export default function AboutPage() {
               className="rounded-xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white hover:bg-stone-800"
             >
               Ask about paid options
+            </Link>
+
+            <Link
+              href="/contact?subject=request-local-amenity"
+              className="rounded-xl border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-900 hover:bg-stone-50"
+            >
+              Request local amenity
             </Link>
           </div>
         </div>
@@ -130,15 +143,9 @@ export default function AboutPage() {
             </div>
 
             <div className="rounded-2xl bg-red-50 px-5 py-4 text-center ring-1 ring-red-100">
-              <p className="text-sm font-semibold text-red-800">
-                From
-              </p>
-              <p className="text-3xl font-bold text-red-950">
-                £15
-              </p>
-              <p className="text-sm text-red-800">
-                per month
-              </p>
+              <p className="text-sm font-semibold text-red-800">From</p>
+              <p className="text-3xl font-bold text-red-950">£15</p>
+              <p className="text-sm text-red-800">per month</p>
             </div>
           </div>
 
@@ -179,9 +186,7 @@ export default function AboutPage() {
                     <p className="text-sm font-semibold uppercase tracking-wide text-red-100">
                       Call today
                     </p>
-                    <p className="mt-2 text-2xl font-bold">
-                      01623 000 000
-                    </p>
+                    <p className="mt-2 text-2xl font-bold">01623 000 000</p>
                     <p className="mt-2 text-sm text-red-100">
                       smithandsons.co.uk
                     </p>
@@ -195,27 +200,17 @@ export default function AboutPage() {
                 <p className="font-semibold text-stone-900">
                   Recommended size
                 </p>
-                <p className="mt-1">
-                  1200 × 300 px banner
-                </p>
+                <p className="mt-1">1200 × 300 px banner</p>
               </div>
 
               <div className="rounded-xl bg-white p-4 ring-1 ring-stone-200">
-                <p className="font-semibold text-stone-900">
-                  File types
-                </p>
-                <p className="mt-1">
-                  WEBP, JPG or PNG
-                </p>
+                <p className="font-semibold text-stone-900">File types</p>
+                <p className="mt-1">WEBP, JPG or PNG</p>
               </div>
 
               <div className="rounded-xl bg-white p-4 ring-1 ring-stone-200">
-                <p className="font-semibold text-stone-900">
-                  File size
-                </p>
-                <p className="mt-1">
-                  Maximum 1 MB
-                </p>
+                <p className="font-semibold text-stone-900">File size</p>
+                <p className="mt-1">Maximum 1 MB</p>
               </div>
             </div>
 
@@ -232,13 +227,13 @@ export default function AboutPage() {
 
         <section className="mt-8 rounded-3xl bg-stone-900 p-6 text-white shadow-sm sm:p-8">
           <h2 className="text-2xl font-bold">
-            Start with a free listing
+            Start with a free listing or suggest a useful place
           </h2>
 
           <p className="mt-3 max-w-3xl leading-7 text-stone-200">
-            You do not need a paid plan to be listed. Create a free listing now,
-            then upgrade later if you want more visibility or access to Premium
-            metrics.
+            You do not need a paid plan to be listed. Create a free business
+            listing now, or request a useful local amenity to be added to the
+            directory for residents.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
@@ -254,6 +249,13 @@ export default function AboutPage() {
               className="rounded-xl border border-white/30 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
             >
               View the directory
+            </Link>
+
+            <Link
+              href="/contact?subject=request-local-amenity"
+              className="rounded-xl border border-white/30 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
+            >
+              Request local amenity
             </Link>
           </div>
         </section>
@@ -325,9 +327,7 @@ function PricingCard({
         )}
       </div>
 
-      <h2 className="mt-3 text-2xl font-bold text-stone-950">
-        {title}
-      </h2>
+      <h2 className="mt-3 text-2xl font-bold text-stone-950">{title}</h2>
 
       <p className="mt-3 text-4xl font-bold text-stone-950">
         {price}
@@ -337,9 +337,7 @@ function PricingCard({
         </span>
       </p>
 
-      <p className="mt-4 leading-7 text-stone-700">
-        {description}
-      </p>
+      <p className="mt-4 leading-7 text-stone-700">{description}</p>
 
       <div className="mt-6 border-t border-stone-200 pt-5">
         <h3 className="text-sm font-semibold text-stone-950">
