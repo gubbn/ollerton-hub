@@ -27,6 +27,8 @@ type UsefulListing = {
   category_id: string | null
   useful_listing_type: string | null
   is_approved: boolean | null
+  is_featured: boolean | null
+  is_premium: boolean | null
   status: string | null
   created_at: string
 }
@@ -64,16 +66,8 @@ function ensureWebsiteUrl(value: string) {
   return `https://${trimmed}`
 }
 
-export default function UsefulListingsAdminPage() {
-  const router = useRouter()
-
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState('')
-  const [categories, setCategories] = useState<Category[]>([])
-  const [listings, setListings] = useState<UsefulListing[]>([])
-
-  const [form, setForm] = useState({
+function emptyForm() {
+  return {
     business_name: '',
     useful_listing_type: 'Local information',
     category_id: '',
@@ -87,7 +81,21 @@ export default function UsefulListingsAdminPage() {
     postcode: '',
     service_area: '',
     opening_times: '',
-  })
+  }
+}
+
+export default function UsefulListingsAdminPage() {
+  const router = useRouter()
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [categories, setCategories] = useState<Category[]>([])
+  const [listings, setListings] = useState<UsefulListing[]>([])
+  const [form, setForm] = useState(emptyForm())
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState(emptyForm())
 
   const previewSlug = useMemo(() => {
     return makeSlug(form.business_name)
@@ -166,6 +174,8 @@ export default function UsefulListingsAdminPage() {
         category_id,
         useful_listing_type,
         is_approved,
+        is_featured,
+        is_premium,
         status,
         created_at
       `
@@ -182,29 +192,47 @@ export default function UsefulListingsAdminPage() {
     setListings((data ?? []) as UsefulListing[])
   }
 
-  function updateField(field: keyof typeof form, value: string) {
+  function updateField(field: keyof ReturnType<typeof emptyForm>, value: string) {
     setForm((current) => ({
       ...current,
       [field]: value,
     }))
   }
 
-  function resetForm() {
-    setForm({
-      business_name: '',
-      useful_listing_type: 'Local information',
-      category_id: '',
-      description: '',
-      phone: '',
-      email: '',
-      website: '',
-      address_line_1: '',
-      address_line_2: '',
-      town: '',
-      postcode: '',
-      service_area: '',
-      opening_times: '',
+  function updateEditField(
+    field: keyof ReturnType<typeof emptyForm>,
+    value: string
+  ) {
+    setEditForm((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
+  function startEdit(listing: UsefulListing) {
+    setEditingId(listing.id)
+    setMessage('')
+
+    setEditForm({
+      business_name: listing.business_name || '',
+      useful_listing_type: listing.useful_listing_type || 'Local information',
+      category_id: listing.category_id || '',
+      description: listing.description || '',
+      phone: listing.phone || '',
+      email: listing.email || '',
+      website: listing.website || '',
+      address_line_1: listing.address_line_1 || '',
+      address_line_2: listing.address_line_2 || '',
+      town: listing.town || '',
+      postcode: listing.postcode || '',
+      service_area: listing.service_area || '',
+      opening_times: listing.opening_times || '',
     })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditForm(emptyForm())
   }
 
   async function createListing(event: React.FormEvent<HTMLFormElement>) {
@@ -267,8 +295,54 @@ export default function UsefulListingsAdminPage() {
       return
     }
 
-    resetForm()
+    setForm(emptyForm())
     setMessage('Useful listing added.')
+    await loadListings()
+    setSaving(false)
+  }
+
+  async function saveEdit(id: string) {
+    setMessage('')
+
+    if (!editForm.business_name.trim()) {
+      setMessage('Please enter a name for the listing.')
+      return
+    }
+
+    setSaving(true)
+
+    const { error } = await supabase
+      .from('businesses')
+      .update({
+        business_name: editForm.business_name.trim(),
+        listing_type: 'community',
+        useful_listing_type: editForm.useful_listing_type || null,
+        category_id: editForm.category_id || null,
+        description: editForm.description.trim() || null,
+        phone: editForm.phone.trim() || null,
+        email: editForm.email.trim() || null,
+        website: ensureWebsiteUrl(editForm.website),
+        address_line_1: editForm.address_line_1.trim() || null,
+        address_line_2: editForm.address_line_2.trim() || null,
+        town: editForm.town.trim() || null,
+        postcode: editForm.postcode.trim() || null,
+        service_area: editForm.service_area.trim() || null,
+        opening_times: editForm.opening_times.trim() || null,
+        is_approved: true,
+        status: 'approved',
+        is_featured: false,
+        is_premium: false,
+      })
+      .eq('id', id)
+
+    if (error) {
+      setMessage(error.message)
+      setSaving(false)
+      return
+    }
+
+    setMessage('Useful listing updated.')
+    cancelEdit()
     await loadListings()
     setSaving(false)
   }
@@ -315,9 +389,8 @@ export default function UsefulListingsAdminPage() {
               Useful local listings
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
-              Add non-business information such as schools, places of worship,
-              council services, recycling centres, community venues and local
-              public services.
+              Add and edit schools, places of worship, council services,
+              recycling centres, community venues and local public information.
             </p>
           </div>
 
@@ -341,189 +414,13 @@ export default function UsefulListingsAdminPage() {
           </h2>
 
           <form onSubmit={createListing} className="mt-6 grid gap-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Listing name
-                <input
-                  value={form.business_name}
-                  onChange={(event) =>
-                    updateField('business_name', event.target.value)
-                  }
-                  placeholder="Example: Ollerton Recycling Centre"
-                  className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                />
-              </label>
-
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Useful listing type
-                <select
-                  value={form.useful_listing_type}
-                  onChange={(event) =>
-                    updateField('useful_listing_type', event.target.value)
-                  }
-                  className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                >
-                  {usefulTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Directory category
-                <select
-                  value={form.category_id}
-                  onChange={(event) =>
-                    updateField('category_id', event.target.value)
-                  }
-                  className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                >
-                  <option value="">No category selected</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
-                <p className="font-bold text-stone-900">Preview URL</p>
-                <p className="mt-1 break-all">
-                  /business/{previewSlug || 'listing-name'}
-                </p>
-                <p className="mt-1 text-xs text-stone-500">
-                  A short unique number is added when saved.
-                </p>
-              </div>
-            </div>
-
-            <label className="grid gap-2 text-sm font-semibold text-stone-800">
-              Description
-              <textarea
-                value={form.description}
-                onChange={(event) =>
-                  updateField('description', event.target.value)
-                }
-                rows={5}
-                placeholder="Add useful information for residents. Include what it is, who it helps, and anything people need to know before visiting or contacting them."
-                className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-              />
-            </label>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Phone
-                <input
-                  value={form.phone}
-                  onChange={(event) => updateField('phone', event.target.value)}
-                  placeholder="Telephone number"
-                  className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                />
-              </label>
-
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Email
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(event) => updateField('email', event.target.value)}
-                  placeholder="Email address"
-                  className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                />
-              </label>
-
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Website
-                <input
-                  value={form.website}
-                  onChange={(event) =>
-                    updateField('website', event.target.value)
-                  }
-                  placeholder="https://example.co.uk"
-                  className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Address line 1
-                <input
-                  value={form.address_line_1}
-                  onChange={(event) =>
-                    updateField('address_line_1', event.target.value)
-                  }
-                  placeholder="Building / street"
-                  className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                />
-              </label>
-
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Address line 2
-                <input
-                  value={form.address_line_2}
-                  onChange={(event) =>
-                    updateField('address_line_2', event.target.value)
-                  }
-                  placeholder="Area / extra address info"
-                  className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Town
-                <input
-                  value={form.town}
-                  onChange={(event) => updateField('town', event.target.value)}
-                  placeholder="Ollerton"
-                  className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                />
-              </label>
-
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Postcode
-                <input
-                  value={form.postcode}
-                  onChange={(event) =>
-                    updateField('postcode', event.target.value)
-                  }
-                  placeholder="Postcode"
-                  className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                />
-              </label>
-
-              <label className="grid gap-2 text-sm font-semibold text-stone-800">
-                Service area
-                <input
-                  value={form.service_area}
-                  onChange={(event) =>
-                    updateField('service_area', event.target.value)
-                  }
-                  placeholder="Ollerton, Boughton, Edwinstowe..."
-                  className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-                />
-              </label>
-            </div>
-
-            <label className="grid gap-2 text-sm font-semibold text-stone-800">
-              Opening times / availability
-              <textarea
-                value={form.opening_times}
-                onChange={(event) =>
-                  updateField('opening_times', event.target.value)
-                }
-                rows={4}
-                placeholder="Example: Monday to Friday, 9am to 5pm. Closed bank holidays."
-                className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-              />
-            </label>
+            <UsefulListingFields
+              values={form}
+              categories={categories}
+              previewSlug={previewSlug}
+              onChange={updateField}
+              showPreview
+            />
 
             <button
               type="submit"
@@ -542,7 +439,7 @@ export default function UsefulListingsAdminPage() {
                 Existing useful listings
               </h2>
               <p className="mt-1 text-sm text-stone-600">
-                Manage community and public information entries.
+                Edit, view or delete community and public information entries.
               </p>
             </div>
 
@@ -557,69 +454,316 @@ export default function UsefulListingsAdminPage() {
                 No useful listings have been added yet.
               </p>
             ) : (
-              listings.map((listing) => (
-                <article
-                  key={listing.id}
-                  className="rounded-2xl border border-stone-200 bg-stone-50 p-4"
-                >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-bold text-stone-950">
-                          {listing.business_name}
-                        </h3>
+              listings.map((listing) => {
+                const isEditing = editingId === listing.id
 
-                        <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800">
-                          {listing.useful_listing_type || 'Useful listing'}
-                        </span>
+                return (
+                  <article
+                    key={listing.id}
+                    className="rounded-2xl border border-stone-200 bg-stone-50 p-4"
+                  >
+                    {isEditing ? (
+                      <div className="grid gap-4">
+                        <UsefulListingFields
+                          values={editForm}
+                          categories={categories}
+                          onChange={updateEditField}
+                        />
 
-                        <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">
-                          {listing.status || 'approved'}
-                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => saveEdit(listing.id)}
+                            className="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-400"
+                          >
+                            {saving ? 'Saving...' : 'Save changes'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-800 hover:bg-stone-100"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-bold text-stone-950">
+                              {listing.business_name}
+                            </h3>
 
-                      <p className="mt-1 break-all text-sm text-stone-600">
-                        /business/{listing.slug}
-                      </p>
+                            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800">
+                              {listing.useful_listing_type || 'Useful listing'}
+                            </span>
 
-                      {listing.description ? (
-                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-stone-700">
-                          {listing.description}
-                        </p>
-                      ) : null}
+                            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">
+                              {listing.status || 'approved'}
+                            </span>
 
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-stone-600">
-                        {listing.town ? <span>{listing.town}</span> : null}
-                        {listing.postcode ? <span>{listing.postcode}</span> : null}
-                        {listing.website ? <span>Website added</span> : null}
-                        {listing.phone ? <span>Phone added</span> : null}
-                        {listing.email ? <span>Email added</span> : null}
+                            {listing.is_featured ? (
+                              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                                Featured flag on
+                              </span>
+                            ) : null}
+
+                            {listing.is_premium ? (
+                              <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">
+                                Premium flag on
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <p className="mt-1 break-all text-sm text-stone-600">
+                            /business/{listing.slug}
+                          </p>
+
+                          {listing.description ? (
+                            <p className="mt-3 line-clamp-2 text-sm leading-6 text-stone-700">
+                              {listing.description}
+                            </p>
+                          ) : null}
+
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-stone-600">
+                            {listing.town ? <span>{listing.town}</span> : null}
+                            {listing.postcode ? (
+                              <span>{listing.postcode}</span>
+                            ) : null}
+                            {listing.website ? (
+                              <span>Website added</span>
+                            ) : null}
+                            {listing.phone ? <span>Phone added</span> : null}
+                            {listing.email ? <span>Email added</span> : null}
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(listing)}
+                            className="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white hover:bg-red-800"
+                          >
+                            Edit
+                          </button>
+
+                          <Link
+                            href={`/business/${listing.slug}`}
+                            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-800 hover:bg-stone-100"
+                          >
+                            View
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => deleteListing(listing.id)}
+                            className="rounded-full bg-stone-900 px-4 py-2 text-sm font-bold text-white hover:bg-red-800"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <Link
-                        href={`/business/${listing.slug}`}
-                        className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-800 hover:bg-stone-100"
-                      >
-                        View
-                      </Link>
-
-                      <button
-                        type="button"
-                        onClick={() => deleteListing(listing.id)}
-                        className="rounded-full bg-stone-900 px-4 py-2 text-sm font-bold text-white hover:bg-red-800"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))
+                    )}
+                  </article>
+                )
+              })
             )}
           </div>
         </section>
       </section>
     </main>
+  )
+}
+
+function UsefulListingFields({
+  values,
+  categories,
+  onChange,
+  previewSlug,
+  showPreview = false,
+}: {
+  values: ReturnType<typeof emptyForm>
+  categories: Category[]
+  onChange: (field: keyof ReturnType<typeof emptyForm>, value: string) => void
+  previewSlug?: string
+  showPreview?: boolean
+}) {
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Listing name
+          <input
+            value={values.business_name}
+            onChange={(event) => onChange('business_name', event.target.value)}
+            placeholder="Example: Ollerton Recycling Centre"
+            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          />
+        </label>
+
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Useful listing type
+          <select
+            value={values.useful_listing_type}
+            onChange={(event) =>
+              onChange('useful_listing_type', event.target.value)
+            }
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          >
+            {usefulTypes.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Directory category
+          <select
+            value={values.category_id}
+            onChange={(event) => onChange('category_id', event.target.value)}
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          >
+            <option value="">No category selected</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {showPreview ? (
+          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
+            <p className="font-bold text-stone-900">Preview URL</p>
+            <p className="mt-1 break-all">
+              /business/{previewSlug || 'listing-name'}
+            </p>
+            <p className="mt-1 text-xs text-stone-500">
+              A short unique number is added when saved.
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      <label className="grid gap-2 text-sm font-semibold text-stone-800">
+        Description
+        <textarea
+          value={values.description}
+          onChange={(event) => onChange('description', event.target.value)}
+          rows={5}
+          placeholder="Add useful information for residents."
+          className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+        />
+      </label>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Phone
+          <input
+            value={values.phone}
+            onChange={(event) => onChange('phone', event.target.value)}
+            placeholder="Telephone number"
+            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          />
+        </label>
+
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Email
+          <input
+            type="email"
+            value={values.email}
+            onChange={(event) => onChange('email', event.target.value)}
+            placeholder="Email address"
+            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          />
+        </label>
+
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Website
+          <input
+            value={values.website}
+            onChange={(event) => onChange('website', event.target.value)}
+            placeholder="https://example.co.uk"
+            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          />
+        </label>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Address line 1
+          <input
+            value={values.address_line_1}
+            onChange={(event) =>
+              onChange('address_line_1', event.target.value)
+            }
+            placeholder="Building / street"
+            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          />
+        </label>
+
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Address line 2
+          <input
+            value={values.address_line_2}
+            onChange={(event) =>
+              onChange('address_line_2', event.target.value)
+            }
+            placeholder="Area / extra address info"
+            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          />
+        </label>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Town
+          <input
+            value={values.town}
+            onChange={(event) => onChange('town', event.target.value)}
+            placeholder="Ollerton"
+            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          />
+        </label>
+
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Postcode
+          <input
+            value={values.postcode}
+            onChange={(event) => onChange('postcode', event.target.value)}
+            placeholder="Postcode"
+            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          />
+        </label>
+
+        <label className="grid gap-2 text-sm font-semibold text-stone-800">
+          Service area
+          <input
+            value={values.service_area}
+            onChange={(event) => onChange('service_area', event.target.value)}
+            placeholder="Ollerton, Boughton, Edwinstowe..."
+            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          />
+        </label>
+      </div>
+
+      <label className="grid gap-2 text-sm font-semibold text-stone-800">
+        Opening times / availability
+        <textarea
+          value={values.opening_times}
+          onChange={(event) => onChange('opening_times', event.target.value)}
+          rows={4}
+          placeholder="Example: Monday to Friday, 9am to 5pm. Closed bank holidays."
+          className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+        />
+      </label>
+    </div>
   )
 }
