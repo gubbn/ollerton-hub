@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -31,13 +31,50 @@ type Business = {
   logo_url: string | null
   is_approved: boolean
   is_featured: boolean
+  is_premium: boolean
 }
 
-const emptyBusiness: Business = {
-  id: '',
+type FormState = {
+  business_name: string
+  category_id: string
+  description: string
+  services: string
+  phone: string
+  email: string
+  website: string
+  facebook: string
+  instagram: string
+  address_line_1: string
+  address_line_2: string
+  town: string
+  postcode: string
+  service_area: string
+  opening_times: string
+  logo_url: string
+  is_featured: boolean
+  is_premium: boolean
+}
+
+type ListingTier = 'free' | 'featured' | 'premium'
+
+const WORD_LIMITS = {
+  free: {
+    description: 50,
+    services: 40,
+  },
+  featured: {
+    description: 120,
+    services: 100,
+  },
+  premium: {
+    description: 250,
+    services: 200,
+  },
+}
+
+const emptyForm: FormState = {
   business_name: '',
-  slug: '',
-  category_id: null,
+  category_id: '',
   description: '',
   services: '',
   phone: '',
@@ -52,8 +89,8 @@ const emptyBusiness: Business = {
   service_area: '',
   opening_times: '',
   logo_url: '',
-  is_approved: false,
   is_featured: false,
+  is_premium: false,
 }
 
 function makeSlug(value: string) {
@@ -65,22 +102,47 @@ function makeSlug(value: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-export default function DashboardBusinessPage() {
+function countWords(value: string) {
+  return value.trim().split(/\s+/).filter(Boolean).length
+}
+
+function getListingTier(form: Pick<FormState, 'is_featured' | 'is_premium'>): ListingTier {
+  if (form.is_premium) return 'premium'
+  if (form.is_featured) return 'featured'
+  return 'free'
+}
+
+function getTierLabel(tier: ListingTier) {
+  if (tier === 'premium') return 'Premium'
+  if (tier === 'featured') return 'Featured'
+  return 'Free'
+}
+
+export default function BusinessDashboardPage() {
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  const [userId, setUserId] = useState<string | null>(null)
-  const [categories, setCategories] = useState<Category[]>([])
-  const [business, setBusiness] = useState<Business>(emptyBusiness)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
-  const publicListingUrl = useMemo(() => {
-    if (!business.slug) return null
-    return `/business/${business.slug}`
-  }, [business.slug])
+  const [business, setBusiness] = useState<Business | null>(null)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [form, setForm] = useState<FormState>(emptyForm)
+
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const tier = getListingTier(form)
+  const tierLabel = getTierLabel(tier)
+
+  const descriptionWords = countWords(form.description)
+  const servicesWords = countWords(form.services)
+
+  const descriptionLimit = WORD_LIMITS[tier].description
+  const servicesLimit = WORD_LIMITS[tier].services
+
+  const descriptionOverLimit = descriptionWords > descriptionLimit
+  const servicesOverLimit = servicesWords > servicesLimit
 
   useEffect(() => {
     loadPage()
@@ -99,8 +161,6 @@ export default function DashboardBusinessPage() {
       return
     }
 
-    setUserId(user.id)
-
     const { data: categoryData } = await supabase
       .from('categories')
       .select('id, name')
@@ -108,9 +168,10 @@ export default function DashboardBusinessPage() {
 
     setCategories((categoryData as Category[] | null) ?? [])
 
-    const { data: businessData, error: businessError } = await supabase
+    const { data: businessData } = await supabase
       .from('businesses')
-      .select(`
+      .select(
+        `
         id,
         business_name,
         slug,
@@ -130,126 +191,234 @@ export default function DashboardBusinessPage() {
         opening_times,
         logo_url,
         is_approved,
-        is_featured
-      `)
+        is_featured,
+        is_premium
+      `
+      )
       .eq('owner_id', user.id)
       .maybeSingle()
 
-    if (businessError) {
-      setError(businessError.message)
-      setLoading(false)
-      return
-    }
-
     if (businessData) {
-      setBusiness(businessData as Business)
+      const loadedBusiness = businessData as Business
+
+      setBusiness(loadedBusiness)
+
+      setForm({
+        business_name: loadedBusiness.business_name ?? '',
+        category_id: loadedBusiness.category_id ?? '',
+        description: loadedBusiness.description ?? '',
+        services: loadedBusiness.services ?? '',
+        phone: loadedBusiness.phone ?? '',
+        email: loadedBusiness.email ?? '',
+        website: loadedBusiness.website ?? '',
+        facebook: loadedBusiness.facebook ?? '',
+        instagram: loadedBusiness.instagram ?? '',
+        address_line_1: loadedBusiness.address_line_1 ?? '',
+        address_line_2: loadedBusiness.address_line_2 ?? '',
+        town: loadedBusiness.town ?? '',
+        postcode: loadedBusiness.postcode ?? '',
+        service_area: loadedBusiness.service_area ?? '',
+        opening_times: loadedBusiness.opening_times ?? '',
+        logo_url: loadedBusiness.logo_url ?? '',
+        is_featured: loadedBusiness.is_featured ?? false,
+        is_premium: loadedBusiness.is_premium ?? false,
+      })
     }
 
     setLoading(false)
   }
 
-  function updateField(field: keyof Business, value: string) {
-    setBusiness((current) => ({
+  function updateField(
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) {
+    const { name, value } = event.target
+
+    setForm((current) => ({
       ...current,
-      [field]: value,
-      ...(field === 'business_name' && !current.id
-        ? { slug: makeSlug(value) }
-        : {}),
+      [name]: value,
     }))
   }
 
-  async function uploadLogo(file: File) {
-    if (!userId) return
+  async function uploadLogo(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
 
-    setUploading(true)
+    if (!file) return
+
     setError('')
-    setMessage('')
+    setSuccess('')
+    setUploadingLogo(true)
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      router.push('/login')
+      return
+    }
 
     const fileExt = file.name.split('.').pop()
-    const fileName = `${userId}-${Date.now()}.${fileExt}`
-    const filePath = `business-logos/${fileName}`
+    const safeFileName = `${Date.now()}.${fileExt}`
+    const filePath = `${user.id}/${safeFileName}`
 
     const { error: uploadError } = await supabase.storage
-      .from('logos')
+      .from('business-logos')
       .upload(filePath, file, {
+        cacheControl: '3600',
         upsert: true,
       })
 
     if (uploadError) {
       setError(uploadError.message)
-      setUploading(false)
+      setUploadingLogo(false)
       return
     }
 
-    const { data } = supabase.storage.from('logos').getPublicUrl(filePath)
+    const { data } = supabase.storage
+      .from('business-logos')
+      .getPublicUrl(filePath)
 
-    setBusiness((current) => ({
+    setForm((current) => ({
       ...current,
       logo_url: data.publicUrl,
     }))
 
-    setMessage('Logo uploaded. Remember to save your business.')
-    setUploading(false)
+    setUploadingLogo(false)
+    setSuccess('Logo uploaded. Remember to save your listing.')
   }
 
-  async function saveBusiness() {
-    if (!userId) return
+  async function saveBusiness(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    setError('')
+    setSuccess('')
+
+    if (!form.business_name.trim()) {
+      setError('Business name is required.')
+      return
+    }
+
+    if (!form.category_id) {
+      setError('Please choose a category.')
+      return
+    }
+
+    if (descriptionOverLimit) {
+      setError(
+        `${tierLabel} listings can use up to ${descriptionLimit} words in the description. Your description is currently ${descriptionWords} words.`
+      )
+      return
+    }
+
+    if (servicesOverLimit) {
+      setError(
+        `${tierLabel} listings can use up to ${servicesLimit} words in the services section. Your services section is currently ${servicesWords} words.`
+      )
+      return
+    }
 
     setSaving(true)
-    setError('')
-    setMessage('')
 
-    const slug = business.slug || makeSlug(business.business_name)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    const slug = makeSlug(form.business_name)
+
+    if (!slug) {
+      setError('Please enter a valid business name.')
+      setSaving(false)
+      return
+    }
 
     const payload = {
-      owner_id: userId,
-      business_name: business.business_name.trim(),
+      owner_id: user.id,
+      business_name: form.business_name.trim(),
       slug,
-      category_id: business.category_id || null,
-      description: business.description || null,
-      services: business.services || null,
-      phone: business.phone || null,
-      email: business.email || null,
-      website: business.website || null,
-      facebook: business.facebook || null,
-      instagram: business.instagram || null,
-      address_line_1: business.address_line_1 || null,
-      address_line_2: business.address_line_2 || null,
-      town: business.town || null,
-      postcode: business.postcode || null,
-      service_area: business.service_area || null,
-      opening_times: business.opening_times || null,
-      logo_url: business.logo_url || null,
+      category_id: form.category_id || null,
+      description: form.description.trim() || null,
+      services: form.services.trim() || null,
+      phone: form.phone.trim() || null,
+      email: form.email.trim() || null,
+      website: form.website.trim() || null,
+      facebook: form.facebook.trim() || null,
+      instagram: form.instagram.trim() || null,
+      address_line_1: form.address_line_1.trim() || null,
+      address_line_2: form.address_line_2.trim() || null,
+      town: form.town.trim() || null,
+      postcode: form.postcode.trim() || null,
+      service_area: form.service_area.trim() || null,
+      opening_times: form.opening_times.trim() || null,
+      logo_url: form.logo_url.trim() || null,
+      is_approved: false,
+      status: 'pending',
+      updated_at: new Date().toISOString(),
     }
 
-    if (!payload.business_name) {
-      setError('Business name is required.')
-      setSaving(false)
-      return
-    }
+    if (business) {
+      const { error: updateError } = await supabase
+        .from('businesses')
+        .update(payload)
+        .eq('id', business.id)
 
-    const query = business.id
-      ? supabase.from('businesses').update(payload).eq('id', business.id)
-      : supabase.from('businesses').insert(payload).select().single()
+      if (updateError) {
+        setError(updateError.message)
+        setSaving(false)
+        return
+      }
 
-    const { data, error: saveError } = await query
-
-    if (saveError) {
-      setError(saveError.message)
-      setSaving(false)
-      return
-    }
-
-    if (data) {
-      setBusiness(data as Business)
+      setSuccess('Business listing saved. Changes are now awaiting approval.')
     } else {
-      setBusiness((current) => ({
-        ...current,
-        slug,
-      }))
+      const { data: insertedBusiness, error: insertError } = await supabase
+        .from('businesses')
+        .insert({
+          ...payload,
+          is_featured: false,
+          is_premium: false,
+          created_at: new Date().toISOString(),
+        })
+        .select(
+          `
+          id,
+          business_name,
+          slug,
+          category_id,
+          description,
+          services,
+          phone,
+          email,
+          website,
+          facebook,
+          instagram,
+          address_line_1,
+          address_line_2,
+          town,
+          postcode,
+          service_area,
+          opening_times,
+          logo_url,
+          is_approved,
+          is_featured,
+          is_premium
+        `
+        )
+        .single()
+
+      if (insertError) {
+        setError(insertError.message)
+        setSaving(false)
+        return
+      }
+
+      setBusiness(insertedBusiness as Business)
+      setSuccess('Business listing created. It is now awaiting approval.')
     }
 
-    setMessage('Business saved successfully.')
     setSaving(false)
   }
 
@@ -257,7 +426,7 @@ export default function DashboardBusinessPage() {
     return (
       <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
         <div className="mx-auto max-w-5xl">
-          <p>Loading business dashboard...</p>
+          <p>Loading business listing...</p>
         </div>
       </main>
     )
@@ -266,76 +435,130 @@ export default function DashboardBusinessPage() {
   return (
     <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
       <div className="mx-auto max-w-5xl space-y-6">
-        <Link href="/dashboard" className="text-sm text-red-700 underline">
-          ← Back to dashboard
-        </Link>
-
         <section className="rounded-3xl bg-stone-900 p-6 text-white">
-          <p className="text-sm font-semibold uppercase tracking-wide text-red-300">
-            Business owner area
-          </p>
+          <Link
+            href="/dashboard"
+            className="text-sm font-semibold text-red-300 hover:text-red-200"
+          >
+            ← Back to dashboard
+          </Link>
 
-          <h1 className="mt-2 text-3xl font-bold">
-            Manage your business listing
-          </h1>
+          <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-red-300">
+                Business listing
+              </p>
 
-          <p className="mt-3 max-w-2xl text-stone-200">
-            Update your profile, contact details, logo, address and opening
-            times.
-          </p>
+              <h1 className="mt-2 text-3xl font-bold">
+                {business ? 'Edit your listing' : 'Create your listing'}
+              </h1>
 
-          <div className="mt-5 flex flex-wrap gap-3">
-            {publicListingUrl && business.is_approved && (
-              <Link
-                href={publicListingUrl}
-                className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
-              >
-                View public listing
-              </Link>
-            )}
+              <p className="mt-3 max-w-2xl text-stone-200">
+                Add your business details so local people can find your services
+                in Ollerton Hub.
+              </p>
+            </div>
 
-            {!business.is_approved && business.id && (
-              <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
-                Awaiting approval
-              </span>
-            )}
-
-            {business.is_featured && (
+            <div className="flex flex-wrap gap-2">
               <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
-                Featured listing
+                {tierLabel} listing
               </span>
-            )}
+
+              {business?.is_approved ? (
+                <span className="rounded-xl bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
+                  Approved
+                </span>
+              ) : (
+                <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+                  Awaiting approval
+                </span>
+              )}
+            </div>
           </div>
         </section>
 
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-          <h2 className="text-xl font-bold text-stone-900">
-            Business details
-          </h2>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
+                Word limits
+              </p>
 
-          <div className="mt-6 grid gap-5 md:grid-cols-2">
-            <FormInput
-              label="Business name"
-              value={business.business_name}
-              onChange={(value) => updateField('business_name', value)}
+              <h2 className="mt-1 text-xl font-bold text-stone-950">
+                Your current plan: {tierLabel}
+              </h2>
+
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+                Free listings have shorter descriptions. Featured and Premium
+                listings allow more space to describe your business and services.
+              </p>
+            </div>
+
+            {!form.is_premium && (
+              <Link
+                href="/contact"
+                className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+              >
+                Ask about upgrading
+              </Link>
+            )}
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <LimitCard
+              title="Description"
+              used={descriptionWords}
+              limit={descriptionLimit}
+              overLimit={descriptionOverLimit}
             />
 
-            <FormInput
-              label="Slug"
-              value={business.slug}
-              onChange={(value) => updateField('slug', makeSlug(value))}
+            <LimitCard
+              title="Services"
+              used={servicesWords}
+              limit={servicesLimit}
+              overLimit={servicesOverLimit}
+            />
+          </div>
+        </section>
+
+        <form
+          onSubmit={saveBusiness}
+          className="space-y-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200"
+        >
+          {error && (
+            <div className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-800 ring-1 ring-red-200">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="rounded-2xl bg-green-50 p-4 text-sm font-medium text-green-800 ring-1 ring-green-200">
+              {success}
+            </div>
+          )}
+
+          <section className="grid gap-5 md:grid-cols-2">
+            <TextInput
+              label="Business name"
+              name="business_name"
+              value={form.business_name}
+              onChange={updateField}
+              required
             />
 
             <div>
-              <label className="text-sm font-semibold">Category</label>
+              <label className="block text-sm font-semibold text-stone-800">
+                Category
+              </label>
+
               <select
-                value={business.category_id ?? ''}
-                onChange={(event) =>
-                  updateField('category_id', event.target.value)
-                }
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+                name="category_id"
+                value={form.category_id}
+                onChange={updateField}
+                required
+                className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
               >
-                <option value="">Select category</option>
+                <option value="">Choose a category</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -343,186 +566,313 @@ export default function DashboardBusinessPage() {
                 ))}
               </select>
             </div>
+          </section>
 
+          <section className="grid gap-5 md:grid-cols-2">
+            <TextInput
+              label="Phone"
+              name="phone"
+              value={form.phone}
+              onChange={updateField}
+            />
+
+            <TextInput
+              label="Email"
+              name="email"
+              type="email"
+              value={form.email}
+              onChange={updateField}
+            />
+
+            <TextInput
+              label="Website"
+              name="website"
+              value={form.website}
+              onChange={updateField}
+              placeholder="https://example.co.uk"
+            />
+
+            <TextInput
+              label="Facebook"
+              name="facebook"
+              value={form.facebook}
+              onChange={updateField}
+              placeholder="https://facebook.com/your-page"
+            />
+
+            <TextInput
+              label="Instagram"
+              name="instagram"
+              value={form.instagram}
+              onChange={updateField}
+              placeholder="https://instagram.com/your-page"
+            />
+          </section>
+
+          <section>
+            <label className="block text-sm font-semibold text-stone-800">
+              Business description
+            </label>
+
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={updateField}
+              rows={5}
+              className={`mt-2 w-full rounded-xl border bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:ring-2 ${
+                descriptionOverLimit
+                  ? 'border-red-500 focus:border-red-600 focus:ring-red-100'
+                  : 'border-stone-300 focus:border-red-600 focus:ring-red-100'
+              }`}
+              placeholder="Tell people what your business does."
+            />
+
+            <WordCounter
+              used={descriptionWords}
+              limit={descriptionLimit}
+              overLimit={descriptionOverLimit}
+            />
+          </section>
+
+          <section>
+            <label className="block text-sm font-semibold text-stone-800">
+              Services
+            </label>
+
+            <textarea
+              name="services"
+              value={form.services}
+              onChange={updateField}
+              rows={5}
+              className={`mt-2 w-full rounded-xl border bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:ring-2 ${
+                servicesOverLimit
+                  ? 'border-red-500 focus:border-red-600 focus:ring-red-100'
+                  : 'border-stone-300 focus:border-red-600 focus:ring-red-100'
+              }`}
+              placeholder="List your main services."
+            />
+
+            <WordCounter
+              used={servicesWords}
+              limit={servicesLimit}
+              overLimit={servicesOverLimit}
+            />
+          </section>
+
+          <section className="grid gap-5 md:grid-cols-2">
+            <TextInput
+              label="Address line 1"
+              name="address_line_1"
+              value={form.address_line_1}
+              onChange={updateField}
+            />
+
+            <TextInput
+              label="Address line 2"
+              name="address_line_2"
+              value={form.address_line_2}
+              onChange={updateField}
+            />
+
+            <TextInput
+              label="Town"
+              name="town"
+              value={form.town}
+              onChange={updateField}
+            />
+
+            <TextInput
+              label="Postcode"
+              name="postcode"
+              value={form.postcode}
+              onChange={updateField}
+            />
+          </section>
+
+          <section className="grid gap-5 md:grid-cols-2">
             <div>
-              <label className="text-sm font-semibold">Logo</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  if (file) uploadLogo(file)
-                }}
-                className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+              <label className="block text-sm font-semibold text-stone-800">
+                Service area
+              </label>
+
+              <textarea
+                name="service_area"
+                value={form.service_area}
+                onChange={updateField}
+                rows={4}
+                className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                placeholder="Example: Ollerton, Boughton, Edwinstowe and surrounding villages."
               />
-
-              {business.logo_url && (
-                <img
-                  src={business.logo_url}
-                  alt="Business logo preview"
-                  className="mt-4 h-20 w-20 rounded-2xl object-cover ring-1 ring-stone-200"
-                />
-              )}
-
-              {uploading && (
-                <p className="mt-2 text-sm text-stone-500">Uploading...</p>
-              )}
             </div>
 
-            <FormTextarea
-              label="Description"
-              value={business.description ?? ''}
-              onChange={(value) => updateField('description', value)}
-            />
+            <div>
+              <label className="block text-sm font-semibold text-stone-800">
+                Opening times
+              </label>
 
-            <FormTextarea
-              label="Services"
-              value={business.services ?? ''}
-              onChange={(value) => updateField('services', value)}
-            />
+              <textarea
+                name="opening_times"
+                value={form.opening_times}
+                onChange={updateField}
+                rows={4}
+                className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                placeholder="Example: Monday to Friday, 9am to 5pm."
+              />
+            </div>
+          </section>
 
-            <FormInput
-              label="Phone"
-              value={business.phone ?? ''}
-              onChange={(value) => updateField('phone', value)}
-            />
+          <section className="rounded-2xl bg-stone-50 p-5 ring-1 ring-stone-200">
+            <label className="block text-sm font-semibold text-stone-800">
+              Business logo
+            </label>
 
-            <FormInput
-              label="Email"
-              value={business.email ?? ''}
-              onChange={(value) => updateField('email', value)}
-            />
-
-            <FormInput
-              label="Website"
-              value={business.website ?? ''}
-              onChange={(value) => updateField('website', value)}
-            />
-
-            <FormInput
-              label="Facebook"
-              value={business.facebook ?? ''}
-              onChange={(value) => updateField('facebook', value)}
-            />
-
-            <FormInput
-              label="Instagram"
-              value={business.instagram ?? ''}
-              onChange={(value) => updateField('instagram', value)}
-            />
-
-            <FormInput
-              label="Address line 1"
-              value={business.address_line_1 ?? ''}
-              onChange={(value) => updateField('address_line_1', value)}
-            />
-
-            <FormInput
-              label="Address line 2"
-              value={business.address_line_2 ?? ''}
-              onChange={(value) => updateField('address_line_2', value)}
-            />
-
-            <FormInput
-              label="Town"
-              value={business.town ?? ''}
-              onChange={(value) => updateField('town', value)}
-            />
-
-            <FormInput
-              label="Postcode"
-              value={business.postcode ?? ''}
-              onChange={(value) => updateField('postcode', value)}
-            />
-
-            <FormInput
-              label="Service area"
-              value={business.service_area ?? ''}
-              onChange={(value) => updateField('service_area', value)}
-              fullWidth
-            />
-
-            <FormTextarea
-              label="Opening times"
-              value={business.opening_times ?? ''}
-              onChange={(value) => updateField('opening_times', value)}
-              placeholder={`Monday: 9am - 5pm
-Tuesday: 9am - 5pm
-Wednesday: 9am - 5pm`}
-            />
-          </div>
-
-          {error && (
-            <p className="mt-6 rounded-xl bg-red-50 p-4 text-sm font-medium text-red-700">
-              {error}
+            <p className="mt-1 text-sm text-stone-600">
+              Upload a clear square or landscape logo. JPG, PNG or WEBP works
+              best.
             </p>
-          )}
 
-          {message && (
-            <p className="mt-6 rounded-xl bg-green-50 p-4 text-sm font-medium text-green-700">
-              {message}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={uploadLogo}
+              className="mt-4 block w-full text-sm text-stone-700 file:mr-4 file:rounded-xl file:border-0 file:bg-stone-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-stone-800"
+            />
+
+            {uploadingLogo && (
+              <p className="mt-3 text-sm text-stone-600">
+                Uploading logo...
+              </p>
+            )}
+
+            {form.logo_url && (
+              <div className="mt-4 flex items-center gap-4">
+                <img
+                  src={form.logo_url}
+                  alt="Business logo preview"
+                  className="h-20 w-20 rounded-2xl object-contain ring-1 ring-stone-200"
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      logo_url: '',
+                    }))
+                  }
+                  className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-red-700 ring-1 ring-red-200 hover:bg-red-50"
+                >
+                  Remove logo
+                </button>
+              </div>
+            )}
+          </section>
+
+          <div className="flex flex-col gap-3 border-t border-stone-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-stone-600">
+              Saving changes will send your listing back for approval.
             </p>
-          )}
 
-          <div className="mt-8 flex justify-end">
             <button
-              onClick={saveBusiness}
-              disabled={saving}
-              className="rounded-xl bg-red-700 px-6 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
+              type="submit"
+              disabled={saving || uploadingLogo}
+              className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saving ? 'Saving...' : 'Save business'}
+              {saving ? 'Saving...' : 'Save listing'}
             </button>
           </div>
-        </section>
+        </form>
       </div>
     </main>
   )
 }
 
-function FormInput({
+function TextInput({
   label,
+  name,
   value,
   onChange,
-  fullWidth = false,
+  type = 'text',
+  placeholder,
+  required = false,
 }: {
   label: string
+  name: keyof FormState
   value: string
-  onChange: (value: string) => void
-  fullWidth?: boolean
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+  type?: string
+  placeholder?: string
+  required?: boolean
 }) {
   return (
-    <div className={fullWidth ? 'md:col-span-2' : ''}>
-      <label className="text-sm font-semibold">{label}</label>
+    <div>
+      <label className="block text-sm font-semibold text-stone-800">
+        {label}
+      </label>
+
       <input
+        name={name}
+        type={type}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
       />
     </div>
   )
 }
 
-function FormTextarea({
-  label,
-  value,
-  onChange,
-  placeholder,
+function WordCounter({
+  used,
+  limit,
+  overLimit,
 }: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  placeholder?: string
+  used: number
+  limit: number
+  overLimit: boolean
 }) {
   return (
-    <div className="md:col-span-2">
-      <label className="text-sm font-semibold">{label}</label>
-      <textarea
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        rows={5}
-        placeholder={placeholder}
-        className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3"
-      />
+    <p
+      className={`mt-2 text-xs font-medium ${
+        overLimit ? 'text-red-700' : 'text-stone-500'
+      }`}
+    >
+      {used} / {limit} words
+    </p>
+  )
+}
+
+function LimitCard({
+  title,
+  used,
+  limit,
+  overLimit,
+}: {
+  title: string
+  used: number
+  limit: number
+  overLimit: boolean
+}) {
+  return (
+    <div
+      className={`rounded-2xl p-4 ring-1 ${
+        overLimit
+          ? 'bg-red-50 ring-red-200'
+          : 'bg-stone-50 ring-stone-200'
+      }`}
+    >
+      <p className="text-sm font-semibold text-stone-900">
+        {title}
+      </p>
+
+      <p
+        className={`mt-1 text-sm ${
+          overLimit ? 'text-red-700' : 'text-stone-600'
+        }`}
+      >
+        {used} of {limit} words used
+      </p>
     </div>
   )
 }

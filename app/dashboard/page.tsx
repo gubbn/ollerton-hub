@@ -11,10 +11,29 @@ type Business = {
   slug: string
   is_approved: boolean
   is_featured: boolean
+  is_premium: boolean
 }
 
 type BusinessStat = {
   event_type: string
+}
+
+type Stats = {
+  profile_view: number
+  website_click: number
+  phone_click: number
+  email_click: number
+  facebook_click: number
+  instagram_click: number
+}
+
+const emptyStats: Stats = {
+  profile_view: 0,
+  website_click: 0,
+  phone_click: 0,
+  email_click: 0,
+  facebook_click: 0,
+  instagram_click: 0,
 }
 
 export default function DashboardPage() {
@@ -22,14 +41,7 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true)
   const [business, setBusiness] = useState<Business | null>(null)
-  const [stats, setStats] = useState({
-    profile_view: 0,
-    website_click: 0,
-    phone_click: 0,
-    email_click: 0,
-    facebook_click: 0,
-    instagram_click: 0,
-  })
+  const [stats, setStats] = useState<Stats>(emptyStats)
 
   useEffect(() => {
     loadDashboard()
@@ -49,13 +61,18 @@ export default function DashboardPage() {
 
     const { data: businessData } = await supabase
       .from('businesses')
-      .select('id, business_name, slug, is_approved, is_featured')
+      .select(
+        'id, business_name, slug, is_approved, is_featured, is_premium'
+      )
       .eq('owner_id', user.id)
       .maybeSingle()
 
     if (businessData) {
       const loadedBusiness = businessData as Business
       setBusiness(loadedBusiness)
+
+      // Keep loading stats for all businesses.
+      // Only Premium users see the numbers on the dashboard.
       await loadStats(loadedBusiness.id)
     }
 
@@ -70,18 +87,11 @@ export default function DashboardPage() {
 
     const statsData = (data as BusinessStat[] | null) ?? []
 
-    const nextStats = {
-      profile_view: 0,
-      website_click: 0,
-      phone_click: 0,
-      email_click: 0,
-      facebook_click: 0,
-      instagram_click: 0,
-    }
+    const nextStats: Stats = { ...emptyStats }
 
     statsData.forEach((item) => {
       if (item.event_type in nextStats) {
-        nextStats[item.event_type as keyof typeof nextStats] += 1
+        nextStats[item.event_type as keyof Stats] += 1
       }
     })
 
@@ -118,8 +128,8 @@ export default function DashboardPage() {
               </h1>
 
               <p className="mt-3 max-w-2xl text-stone-200">
-                Manage your Ollerton Hub listing and see how people are
-                interacting with your business.
+                Manage your Ollerton Hub listing, update your business details
+                and access listing tools.
               </p>
             </div>
 
@@ -146,6 +156,12 @@ export default function DashboardPage() {
               {business.is_featured && (
                 <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
                   Featured listing
+                </span>
+              )}
+
+              {business.is_premium && (
+                <span className="rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-800">
+                  Premium listing
                 </span>
               )}
             </div>
@@ -175,14 +191,25 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-              <MiniStat label="Views" value={stats.profile_view} />
-              <MiniStat label="Website" value={stats.website_click} />
-              <MiniStat label="Calls" value={stats.phone_click} />
-              <MiniStat label="Emails" value={stats.email_click} />
-              <MiniStat label="Facebook" value={stats.facebook_click} />
-              <MiniStat label="Instagram" value={stats.instagram_click} />
-            </div>
+            {business.is_premium ? (
+              <>
+                <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+                  <MiniStat label="Views" value={stats.profile_view} />
+                  <MiniStat label="Website" value={stats.website_click} />
+                  <MiniStat label="Calls" value={stats.phone_click} />
+                  <MiniStat label="Emails" value={stats.email_click} />
+                  <MiniStat label="Facebook" value={stats.facebook_click} />
+                  <MiniStat label="Instagram" value={stats.instagram_click} />
+                </div>
+
+                <p className="mt-4 text-xs text-stone-500">
+                  These stats show how visitors are interacting with your public
+                  business listing.
+                </p>
+              </>
+            ) : (
+              <LockedMetrics isFeatured={business.is_featured} />
+            )}
           </section>
         )}
 
@@ -213,8 +240,8 @@ export default function DashboardPage() {
             </h2>
 
             <p className="mt-2 text-sm text-amber-800">
-              Create your listing first. Once approved, your profile views and
-              contact clicks will appear here.
+              Create your listing first. Once approved, your business can appear
+              in the public directory.
             </p>
           </section>
         )}
@@ -223,10 +250,65 @@ export default function DashboardPage() {
   )
 }
 
+function LockedMetrics({ isFeatured }: { isFeatured: boolean }) {
+  return (
+    <div className="mt-4 rounded-2xl bg-stone-50 p-5 ring-1 ring-stone-200">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold uppercase tracking-wide text-stone-500">
+              Premium metrics
+            </p>
+
+            <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
+              Locked
+            </span>
+          </div>
+
+          <h3 className="mt-2 text-xl font-bold text-stone-950">
+            Unlock activity stats with Premium
+          </h3>
+
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+            {isFeatured
+              ? 'Metrics are included with Premium. Upgrade from Featured to Premium to see profile views, website clicks, phone clicks, email clicks and social clicks.'
+              : 'Metrics are available on Premium listings. Upgrade to see profile views, website clicks, phone clicks, email clicks and social clicks.'}
+          </p>
+        </div>
+
+        <Link
+          href="/contact"
+          className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+        >
+          Ask about Premium
+        </Link>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <LockedStat label="Views" />
+        <LockedStat label="Website" />
+        <LockedStat label="Calls" />
+        <LockedStat label="Emails" />
+        <LockedStat label="Facebook" />
+        <LockedStat label="Instagram" />
+      </div>
+    </div>
+  )
+}
+
 function MiniStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl bg-stone-50 px-3 py-3 text-center ring-1 ring-stone-200">
       <p className="text-xl font-bold text-stone-900">{value}</p>
+      <p className="mt-1 text-xs text-stone-500">{label}</p>
+    </div>
+  )
+}
+
+function LockedStat({ label }: { label: string }) {
+  return (
+    <div className="rounded-xl bg-white px-3 py-3 text-center opacity-70 ring-1 ring-stone-200">
+      <p className="text-xl font-bold text-stone-400">—</p>
       <p className="mt-1 text-xs text-stone-500">{label}</p>
     </div>
   )
