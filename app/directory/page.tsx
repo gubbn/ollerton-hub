@@ -63,6 +63,7 @@ function isOtherCategory(category: Category) {
 
 function DirectoryContent() {
   const searchParams = useSearchParams()
+  const queryString = searchParams.toString()
 
   const [loading, setLoading] = useState(true)
   const [listings, setListings] = useState<Listing[]>([])
@@ -76,6 +77,11 @@ function DirectoryContent() {
   const [townFilter, setTownFilter] = useState(
     cleanSearchValue(searchParams.get('town'))
   )
+  useEffect(() => {
+  setSearch(cleanSearchValue(searchParams.get('q')))
+  setCategoryFilter(cleanSearchValue(searchParams.get('category')))
+  setTownFilter(cleanSearchValue(searchParams.get('town')))
+}, [queryString, searchParams])
 
   function normalise(value: string | null | undefined) {
   return (value || '').toLowerCase().trim()

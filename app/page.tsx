@@ -23,6 +23,8 @@ type Business = {
   town: string | null
   service_area: string | null
   logo_url: string | null
+  status: string | null
+  is_approved: boolean | null
   is_featured: boolean | null
   is_premium: boolean | null
   listing_type: string | null
@@ -33,17 +35,6 @@ type Business = {
 type SiteSetting = {
   setting_key: string
   setting_value: string | null
-}
-
-function getCategoryName(categories: CategoryRelation) {
-  if (!categories) return 'Local listing'
-  if (Array.isArray(categories)) return categories[0]?.name ?? 'Local listing'
-  return categories.name
-}
-
-function getListingTypeLabel(business: Business) {
-  if (business.useful_listing_type) return business.useful_listing_type
-  return getCategoryName(business.categories)
 }
 
 function getSetting(settings: SiteSetting[], key: string, fallback: string) {
@@ -60,40 +51,61 @@ function isOtherCategory(category: Category) {
   )
 }
 
+function getCategoryName(categories: CategoryRelation) {
+  if (!categories) return 'Local listing'
+  if (Array.isArray(categories)) return categories[0]?.name ?? 'Local listing'
+  return categories.name
+}
+
+function getListingTypeLabel(business: Business) {
+  if (business.useful_listing_type) return business.useful_listing_type
+  return getCategoryName(business.categories)
+}
+
+function isApprovedBusiness(business: Business) {
+  return business.status === 'approved' || business.is_approved === true
+}
+
+function isPromotedBusiness(business: Business) {
+  return business.is_premium === true || business.is_featured === true
+}
+
 export default async function HomePage() {
-  const [settingsResult, categoriesResult, featuredResult] = await Promise.all([
-    supabase.from('site_settings').select('setting_key, setting_value'),
+  const [settingsResult, categoriesResult, businessesResult] =
+    await Promise.all([
+      supabase.from('site_settings').select('setting_key, setting_value'),
 
-    supabase
-      .from('categories')
-      .select('id, name, slug, description')
-      .order('name', { ascending: true }),
+      supabase
+        .from('categories')
+        .select('id, name, slug, description')
+        .order('name', { ascending: true }),
 
-    supabase
-      .from('businesses')
-      .select(`
-        id,
-        business_name,
-        slug,
-        description,
-        town,
-        service_area,
-        logo_url,
-        is_featured,
-        is_premium,
-        listing_type,
-        useful_listing_type,
-        categories (
-          name,
-          slug
-        )
-      `)
-      .eq('is_approved', true)
-      .order('is_premium', { ascending: false })
-      .order('is_featured', { ascending: false })
-      .order('business_name', { ascending: true })
-      .limit(10),
-  ])
+      supabase
+        .from('businesses')
+        .select(`
+          id,
+          business_name,
+          slug,
+          description,
+          town,
+          service_area,
+          logo_url,
+          status,
+          is_approved,
+          is_featured,
+          is_premium,
+          listing_type,
+          useful_listing_type,
+          categories (
+            name,
+            slug
+          )
+        `)
+        .order('is_premium', { ascending: false })
+        .order('is_featured', { ascending: false })
+        .order('business_name', { ascending: true })
+        .limit(50),
+    ])
 
   const settings = (settingsResult.data || []) as SiteSetting[]
 
@@ -101,7 +113,10 @@ export default async function HomePage() {
     (category) => !isOtherCategory(category)
   )
 
-  const featuredBusinesses = (featuredResult.data || []) as Business[]
+  const featuredBusinesses = ((businessesResult.data || []) as Business[])
+    .filter((business) => isApprovedBusiness(business))
+    .filter((business) => isPromotedBusiness(business))
+    .slice(0, 10)
 
   const heroTitle = getSetting(settings, 'homepage_title', 'Ollerton Hub')
 
@@ -160,107 +175,45 @@ export default async function HomePage() {
               </div>
             </div>
 
-<aside className="rounded-3xl bg-white p-5 text-stone-900 shadow-sm ring-1 ring-white/20">
-  <div className="flex h-full min-h-[260px] flex-col justify-between rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-5">
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-        Local spotlight
-      </p>
+            <aside className="rounded-3xl bg-white p-5 text-stone-900 shadow-sm ring-1 ring-white/20">
+              <div className="flex h-full min-h-[260px] flex-col justify-between rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                    Local spotlight
+                  </p>
 
-      <h2 className="mt-2 text-2xl font-black leading-tight text-stone-950">
-        Promote your business here
-      </h2>
+                  <h2 className="mt-2 text-2xl font-black leading-tight text-stone-950">
+                    Promote your business here
+                  </h2>
 
-      <p className="mt-3 text-sm leading-6 text-stone-600">
-        This space is reserved for a future local advert, sponsor message or
-        featured community notice.
-      </p>
-    </div>
+                  <p className="mt-3 text-sm leading-6 text-stone-600">
+                    This space is reserved for a future local advert, sponsor
+                    message or featured community notice.
+                  </p>
+                </div>
 
-    <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-stone-200">
-      <p className="text-sm font-bold text-stone-900">
-        Coming soon
-      </p>
+                <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-stone-200">
+                  <p className="text-sm font-bold text-stone-900">
+                    Coming soon
+                  </p>
 
-      <p className="mt-1 text-xs leading-5 text-stone-600">
-        Ideal for local offers, events, launches, seasonal promotions or
-        featured listings.
-      </p>
+                  <p className="mt-1 text-xs leading-5 text-stone-600">
+                    Ideal for local offers, events, launches, seasonal
+                    promotions or featured listings.
+                  </p>
 
-      <Link
-        href="/contact?topic=advert-enquiry"
-        className="mt-4 inline-flex rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
-      >
-        Ask about this space
-      </Link>
-    </div>
-  </div>
-</aside>
+                  <Link
+                    href="/contact?topic=advert-enquiry"
+                    className="mt-4 inline-flex rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                  >
+                    Ask about this space
+                  </Link>
+                </div>
+              </div>
+            </aside>
           </div>
         </section>
-<section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
-  <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-        Local amenities
-      </p>
 
-      <h2 className="mt-1 text-2xl font-bold text-stone-950">
-        Schools, places of worship and useful local information
-      </h2>
-
-      <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-        Find useful local information around Ollerton, including schools,
-        places of worship, council services, recycling centres and community
-        contacts.
-      </p>
-    </div>
-
-    <Link
-      href="/contact?topic=local-info"
-      className="inline-flex justify-center rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
-    >
-      Suggest local info
-    </Link>
-  </div>
-
-  <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-    <Link
-      href="/directory?q=school"
-      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
-    >
-      Schools
-    </Link>
-
-    <Link
-      href="/directory?q=place%20of%20worship"
-      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
-    >
-      Places of worship
-    </Link>
-
-    <Link
-      href="/directory?q=council"
-      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
-    >
-      Council services
-    </Link>
-
-    <Link
-      href="/directory?q=recycling"
-      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
-    >
-      Recycling centres
-    </Link>
-
-    <Link
-      href="/directory?q=mp"
-      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
-    >
-      MP / councillors
-    </Link>
-  </div>
-</section>
         <section>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -271,6 +224,11 @@ export default async function HomePage() {
               <h2 className="mt-1 text-2xl font-bold text-stone-950">
                 Find what you need locally
               </h2>
+
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
+                Choose a category to browse local businesses, services and
+                useful information in Ollerton.
+              </p>
             </div>
 
             <Link
@@ -304,99 +262,15 @@ export default async function HomePage() {
               </Link>
             ))}
           </div>
-        </section>
 
-        <section>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-                Featured and useful listings
-              </p>
-
-              <h2 className="mt-1 text-2xl font-bold text-stone-950">
-                Local listings on Ollerton Hub
-              </h2>
-            </div>
-
-            <Link
-              href="/directory"
-              className="text-sm font-semibold text-red-700 hover:underline"
-            >
-              Browse everything →
-            </Link>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {featuredBusinesses.map((business) => (
-              <Link
-                key={business.id}
-                href={`/business/${business.slug}`}
-                className="group rounded-2xl bg-white p-3 shadow-sm ring-1 ring-stone-200 transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <div className="flex items-start gap-2.5">
-                  {business.logo_url ? (
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-stone-100 ring-1 ring-stone-200">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={business.logo_url}
-                        alt={`${business.business_name} logo`}
-                        className="h-full w-full object-contain"
-                      />
-                    </div>
-                  ) : null}
-
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-bold leading-snug text-stone-950 group-hover:text-red-700">
-                      {business.business_name}
-                    </h3>
-
-                    <ListingBadges
-                      isFeatured={business.is_featured}
-                      isPremium={business.is_premium}
-                      listingType={business.listing_type}
-                      usefulListingType={business.useful_listing_type}
-                      className="mt-1.5"
-                    />
-
-                    <p className="mt-1.5 text-[11px] font-bold uppercase tracking-wide text-red-700">
-                      {getListingTypeLabel(business)}
-                    </p>
-                  </div>
-                </div>
-
-                {business.description ? (
-                  <p className="mt-3 line-clamp-2 text-xs leading-5 text-stone-600">
-                    {business.description}
-                  </p>
-                ) : (
-                  <p className="mt-3 text-xs leading-5 text-stone-600">
-                    View this local listing.
-                  </p>
-                )}
-
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {business.town ? (
-                    <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-semibold text-stone-700">
-                      {business.town}
-                    </span>
-                  ) : null}
-
-                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-semibold text-stone-700">
-                    {getCategoryName(business.categories)}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          {featuredBusinesses.length === 0 ? (
+          {categories.length === 0 ? (
             <div className="mt-5 rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-stone-200">
               <h3 className="text-lg font-bold text-stone-900">
-                No listings yet
+                No categories yet
               </h3>
 
               <p className="mt-2 text-sm text-stone-600">
-                Approved listings will appear here once they are added.
+                Categories will appear here once they have been added.
               </p>
             </div>
           ) : null}
@@ -423,6 +297,118 @@ export default async function HomePage() {
               Create or edit listing
             </Link>
           </div>
+        </section>
+
+        <section>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                Featured and Premium
+              </p>
+
+              <h2 className="mt-1 text-2xl font-bold text-stone-950">
+                Featured local listings
+              </h2>
+
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
+                Discover highlighted local businesses on Ollerton Hub.
+              </p>
+            </div>
+
+            <Link
+              href="/contact?topic=featured-listing"
+              className="text-sm font-semibold text-red-700 hover:underline"
+            >
+              Ask about featuring →
+            </Link>
+          </div>
+
+          {featuredBusinesses.length > 0 ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              {featuredBusinesses.map((business) => (
+                <Link
+                  key={business.id}
+                  href={`/business/${business.slug}`}
+                  className="group rounded-2xl bg-white p-3 shadow-sm ring-1 ring-stone-200 transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className="flex items-start gap-2.5">
+                    {business.logo_url ? (
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-stone-100 ring-1 ring-stone-200">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={business.logo_url}
+                          alt={`${business.business_name} logo`}
+                          className="h-full w-full object-contain"
+                        />
+                      </div>
+                    ) : null}
+
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-bold leading-snug text-stone-950 group-hover:text-red-700">
+                        {business.business_name}
+                      </h3>
+
+                      <ListingBadges
+                        isFeatured={business.is_featured}
+                        isPremium={business.is_premium}
+                        listingType={business.listing_type}
+                        usefulListingType={business.useful_listing_type}
+                        className="mt-1.5"
+                      />
+
+                      <p className="mt-1.5 text-[11px] font-bold uppercase tracking-wide text-red-700">
+                        {getListingTypeLabel(business)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {business.description ? (
+                    <p className="mt-3 line-clamp-2 text-xs leading-5 text-stone-600">
+                      {business.description}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-xs leading-5 text-stone-600">
+                      View this local listing.
+                    </p>
+                  )}
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {business.town ? (
+                      <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-semibold text-stone-700">
+                        {business.town}
+                      </span>
+                    ) : null}
+
+                    <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-semibold text-stone-700">
+                      {getCategoryName(business.categories)}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-3xl border border-dashed border-stone-300 bg-white p-6 text-center shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                Space reserved
+              </p>
+
+              <h3 className="mt-2 text-xl font-bold text-stone-950">
+                Featured listings will appear here
+              </h3>
+
+              <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+                This area is reserved for Premium and Featured listings once
+                businesses choose to promote their listing on Ollerton Hub.
+              </p>
+
+              <Link
+                href="/contact?topic=featured-listing"
+                className="mt-5 inline-flex rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
+              >
+                Ask about featuring your listing
+              </Link>
+            </div>
+          )}
         </section>
       </section>
     </main>
