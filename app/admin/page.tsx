@@ -17,6 +17,12 @@ type Listing = {
   created_at: string
 }
 
+type ContactRequest = {
+  id: string
+  status: string | null
+  created_at: string
+}
+
 function getListingStatus(listing: Listing) {
   if (listing.status === 'rejected') return 'rejected'
   if (listing.status === 'approved') return 'approved'
@@ -45,6 +51,7 @@ export default function AdminPage() {
 
   const [loading, setLoading] = useState(true)
   const [listings, setListings] = useState<Listing[]>([])
+  const [contactRequests, setContactRequests] = useState<ContactRequest[]>([])
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -78,28 +85,56 @@ export default function AdminPage() {
         return
       }
 
-      const { data, error: listingsError } = await supabase
-        .from('businesses')
-        .select(
+      const [listingsResult, contactRequestsResult] = await Promise.all([
+        supabase
+          .from('businesses')
+          .select(
+            `
+            id,
+            business_name,
+            status,
+            is_approved,
+            is_featured,
+            is_premium,
+            listing_type,
+            useful_listing_type,
+            created_at
           `
-          id,
-          business_name,
-          status,
-          is_approved,
-          is_featured,
-          is_premium,
-          listing_type,
-          useful_listing_type,
-          created_at
-        `
-        )
-        .order('created_at', { ascending: false })
+          )
+          .order('created_at', { ascending: false }),
 
-      if (listingsError) {
-        setError(listingsError.message)
+        supabase
+          .from('contact_requests')
+          .select(
+            `
+            id,
+            status,
+            created_at
+          `
+          )
+          .order('created_at', { ascending: false }),
+      ])
+
+      const errors: string[] = []
+
+      if (listingsResult.error) {
+        errors.push(listingsResult.error.message)
         setListings([])
       } else {
-        setListings((data || []) as Listing[])
+        setListings((listingsResult.data || []) as Listing[])
+      }
+
+      if (contactRequestsResult.error) {
+        errors.push(contactRequestsResult.error.message)
+        setContactRequests([])
+      } else {
+        setContactRequests(
+          (contactRequestsResult.data || []) as ContactRequest[]
+        )
+      }
+
+      if (errors.length > 0) {
+        setError(errors.join(' '))
       }
 
       setLoading(false)
@@ -141,6 +176,10 @@ export default function AdminPage() {
       (listing) => listing.is_premium === true
     )
 
+    const newContactRequests = contactRequests.filter(
+      (request) => request.status === 'new' || !request.status
+    )
+
     return {
       total: listings.length,
       businesses: businesses.length,
@@ -151,8 +190,10 @@ export default function AdminPage() {
       rejected: rejected.length,
       featured: featured.length,
       premium: premium.length,
+      contactRequests: contactRequests.length,
+      newContactRequests: newContactRequests.length,
     }
-  }, [listings])
+  }, [listings, contactRequests])
 
   const recentListings = listings.slice(0, 8)
 
@@ -183,7 +224,8 @@ export default function AdminPage() {
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
               Manage business submissions, local amenities, useful community
-              listings, reviews, featured visibility and premium options.
+              listings, reviews, contact requests, featured visibility and
+              premium options.
             </p>
           </div>
 
@@ -201,7 +243,7 @@ export default function AdminPage() {
           </div>
         ) : null}
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total listings" value={stats.total} />
           <StatCard label="Businesses" value={stats.businesses} />
           <StatCard label="Local amenities" value={stats.localAmenities} />
@@ -211,6 +253,8 @@ export default function AdminPage() {
           <StatCard label="Rejected" value={stats.rejected} />
           <StatCard label="Featured" value={stats.featured} />
           <StatCard label="Premium" value={stats.premium} />
+          <StatCard label="Contact requests" value={stats.contactRequests} />
+          <StatCard label="New requests" value={stats.newContactRequests} />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -226,6 +270,13 @@ export default function AdminPage() {
             eyebrow="Local amenities"
             title="Manage useful listings"
             description="Add and manage places of worship, schools, recycling centres, council services, community venues and public information."
+          />
+
+          <AdminActionCard
+            href="/admin/contact-requests"
+            eyebrow="Contact centre"
+            title="View contact requests"
+            description="Review subscription enquiries, advert enquiries, listing reports and general contact form messages."
           />
 
           <AdminActionCard
@@ -249,6 +300,7 @@ export default function AdminPage() {
               <h2 className="text-xl font-bold text-stone-950">
                 Recent listings
               </h2>
+
               <p className="mt-1 text-sm text-stone-600">
                 Latest businesses and local amenities added to Ollerton Hub.
               </p>
@@ -267,6 +319,13 @@ export default function AdminPage() {
                 className="text-sm font-bold text-red-700 hover:underline"
               >
                 Local amenities
+              </Link>
+
+              <Link
+                href="/admin/contact-requests"
+                className="text-sm font-bold text-red-700 hover:underline"
+              >
+                Contact requests
               </Link>
             </div>
           </div>
@@ -350,24 +409,14 @@ function AdminActionCard({
         {eyebrow}
       </p>
 
-      <h2 className="mt-2 text-xl font-bold text-stone-950">
-        {title}
-      </h2>
+      <h2 className="mt-2 text-xl font-bold text-stone-950">{title}</h2>
 
-      <p className="mt-2 text-sm leading-6 text-stone-700">
-        {description}
-      </p>
+      <p className="mt-2 text-sm leading-6 text-stone-700">{description}</p>
     </Link>
   )
 }
 
-function StatCard({
-  label,
-  value,
-}: {
-  label: string
-  value: number
-}) {
+function StatCard({ label, value }: { label: string; value: number }) {
   const styles: Record<
     string,
     {
@@ -431,6 +480,18 @@ function StatCard({
       value: 'text-indigo-900',
       bg: 'bg-indigo-50',
     },
+    'Contact requests': {
+      border: 'border-cyan-200',
+      text: 'text-cyan-700',
+      value: 'text-cyan-900',
+      bg: 'bg-cyan-50',
+    },
+    'New requests': {
+      border: 'border-rose-200',
+      text: 'text-rose-700',
+      value: 'text-rose-900',
+      bg: 'bg-rose-50',
+    },
   }
 
   const style = styles[label] || styles['Total listings']
@@ -443,9 +504,7 @@ function StatCard({
         {label}
       </p>
 
-      <p className={`mt-2 text-3xl font-bold ${style.value}`}>
-        {value}
-      </p>
+      <p className={`mt-2 text-3xl font-bold ${style.value}`}>{value}</p>
     </div>
   )
 }
