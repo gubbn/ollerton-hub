@@ -77,6 +77,66 @@ function DirectoryContent() {
     cleanSearchValue(searchParams.get('town'))
   )
 
+  function normalise(value: string | null | undefined) {
+  return (value || '').toLowerCase().trim()
+}
+
+function getStrictLocalInfoSearchType(search: string) {
+  const value = normalise(search)
+
+  if (['school', 'schools'].includes(value)) {
+    return 'school'
+  }
+
+  if (
+    [
+      'place of worship',
+      'places of worship',
+      'church',
+      'churches',
+      'worship',
+    ].includes(value)
+  ) {
+    return 'place of worship'
+  }
+
+  if (
+    [
+      'council',
+      'council service',
+      'council services',
+      'local council',
+    ].includes(value)
+  ) {
+    return 'council service'
+  }
+
+  if (
+    [
+      'mp',
+      'councillor',
+      'councillors',
+      'mp councillor',
+      'mp / councillor',
+    ].includes(value)
+  ) {
+    return 'mp / councillor'
+  }
+
+  if (
+    [
+      'recycling',
+      'recycling centre',
+      'recycling centres',
+      'tip',
+      'waste',
+    ].includes(value)
+  ) {
+    return 'recycling centre'
+  }
+
+  return null
+}
   useEffect(() => {
     loadDirectory()
   }, [])
@@ -146,35 +206,44 @@ function DirectoryContent() {
     ).sort((a, b) => a.localeCompare(b))
   }, [listings])
 
-  const filteredListings = useMemo(() => {
-    const searchTerm = search.toLowerCase().trim()
+const filteredListings = useMemo(() => {
+  const searchTerm = search.toLowerCase().trim()
+  const strictLocalInfoType = getStrictLocalInfoSearchType(searchTerm)
 
-    return listings.filter((listing) => {
-      const categoryName = getCategoryName(listing.categories)
-      const categorySlug = getCategorySlug(listing.categories)
+  return listings.filter((listing) => {
+    const categoryName = getCategoryName(listing.categories)
+    const categorySlug = getCategorySlug(listing.categories)
 
-      const searchableText = `
-        ${listing.business_name}
-        ${listing.description || ''}
-        ${listing.town || ''}
-        ${listing.service_area || ''}
-        ${categoryName}
-        ${listing.useful_listing_type || ''}
-      `.toLowerCase()
+    const matchesCategory = categoryFilter
+      ? categorySlug === categoryFilter
+      : true
 
-      const matchesSearch = searchTerm
-        ? searchableText.includes(searchTerm)
-        : true
+    const matchesTown = townFilter ? listing.town === townFilter : true
 
-      const matchesCategory = categoryFilter
-        ? categorySlug === categoryFilter
-        : true
+    if (!matchesCategory || !matchesTown) {
+      return false
+    }
 
-      const matchesTown = townFilter ? listing.town === townFilter : true
+    if (strictLocalInfoType) {
+      return normalise(listing.useful_listing_type) === strictLocalInfoType
+    }
 
-      return matchesSearch && matchesCategory && matchesTown
-    })
-  }, [listings, search, categoryFilter, townFilter])
+    const searchableText = `
+      ${listing.business_name}
+      ${listing.description || ''}
+      ${listing.town || ''}
+      ${listing.service_area || ''}
+      ${categoryName}
+      ${listing.useful_listing_type || ''}
+    `.toLowerCase()
+
+    const matchesSearch = searchTerm
+      ? searchableText.includes(searchTerm)
+      : true
+
+    return matchesSearch
+  })
+}, [listings, search, categoryFilter, townFilter])
 
   function clearFilters() {
     setSearch('')

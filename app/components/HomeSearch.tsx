@@ -1,47 +1,44 @@
 'use client'
 
-import { useState } from 'react'
+import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+
+function cleanSearch(value: string) {
+  return value.trim()
+}
 
 export default function HomeSearch() {
   const router = useRouter()
   const [search, setSearch] = useState('')
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    const query = search.trim()
+    const cleanedSearch = cleanSearch(search)
 
-    if (!query) {
+    if (!cleanedSearch) {
       router.push('/directory')
       return
     }
 
-    router.push(`/directory?search=${encodeURIComponent(query)}`)
+    router.push(`/directory?q=${encodeURIComponent(cleanedSearch)}`)
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <label className="mb-2 block text-sm font-semibold text-stone-700">
-        Search local businesses
-      </label>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
+      <input
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search businesses, services or local info..."
+        className="min-w-0 flex-1 rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+      />
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <input
-          type="text"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by name, service or category..."
-          className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
-        />
-
-        <button
-          type="submit"
-          className="rounded-xl bg-stone-900 px-6 py-3 font-semibold text-white hover:bg-stone-800"
-        >
-          Search
-        </button>
-      </div>
+      <button
+        type="submit"
+        className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
+      >
+        Search
+      </button>
     </form>
   )
 }
