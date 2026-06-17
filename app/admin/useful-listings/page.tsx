@@ -33,6 +33,22 @@ type UsefulListing = {
   created_at: string
 }
 
+type UsefulListingForm = {
+  business_name: string
+  useful_listing_type: string
+  category_id: string
+  description: string
+  phone: string
+  email: string
+  website: string
+  address_line_1: string
+  address_line_2: string
+  town: string
+  postcode: string
+  service_area: string
+  opening_times: string
+}
+
 const usefulTypes = [
   'School',
   'Place of worship',
@@ -44,6 +60,24 @@ const usefulTypes = [
   'Local information',
   'Other',
 ]
+
+function emptyForm(): UsefulListingForm {
+  return {
+    business_name: '',
+    useful_listing_type: 'Local information',
+    category_id: '',
+    description: '',
+    phone: '',
+    email: '',
+    website: '',
+    address_line_1: '',
+    address_line_2: '',
+    town: '',
+    postcode: '',
+    service_area: '',
+    opening_times: '',
+  }
+}
 
 function makeSlug(value: string) {
   return value
@@ -66,22 +100,12 @@ function ensureWebsiteUrl(value: string) {
   return `https://${trimmed}`
 }
 
-function emptyForm() {
-  return {
-    business_name: '',
-    useful_listing_type: 'Local information',
-    category_id: '',
-    description: '',
-    phone: '',
-    email: '',
-    website: '',
-    address_line_1: '',
-    address_line_2: '',
-    town: '',
-    postcode: '',
-    service_area: '',
-    opening_times: '',
-  }
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 export default function UsefulListingsAdminPage() {
@@ -89,24 +113,50 @@ export default function UsefulListingsAdminPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+
   const [categories, setCategories] = useState<Category[]>([])
   const [listings, setListings] = useState<UsefulListing[]>([])
-  const [form, setForm] = useState(emptyForm())
 
+  const [form, setForm] = useState<UsefulListingForm>(emptyForm())
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState(emptyForm())
+  const [editForm, setEditForm] = useState<UsefulListingForm>(emptyForm())
 
   const previewSlug = useMemo(() => {
     return makeSlug(form.business_name)
   }, [form.business_name])
 
+  const stats = useMemo(() => {
+    return {
+      total: listings.length,
+      schools: listings.filter(
+        (listing) => listing.useful_listing_type === 'School'
+      ).length,
+      placesOfWorship: listings.filter(
+        (listing) => listing.useful_listing_type === 'Place of worship'
+      ).length,
+      publicServices: listings.filter((listing) =>
+        [
+          'Council service',
+          'MP / Councillor',
+          'Recycling centre',
+          'Emergency / public service',
+        ].includes(listing.useful_listing_type || '')
+      ).length,
+    }
+  }, [listings])
+
   useEffect(() => {
     checkAdminAndLoad()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function checkAdminAndLoad() {
     setLoading(true)
+    setError('')
     setMessage('')
 
     const {
@@ -122,10 +172,10 @@ export default function UsefulListingsAdminPage() {
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     if (profileError) {
-      setMessage(profileError.message)
+      setError(profileError.message)
       setLoading(false)
       return
     }
@@ -139,10 +189,10 @@ export default function UsefulListingsAdminPage() {
       .from('categories')
       .select('id, name')
       .neq('name', 'Other')
-      .order('name')
+      .order('name', { ascending: true })
 
     if (categoryError) {
-      setMessage(categoryError.message)
+      setError(categoryError.message)
       setLoading(false)
       return
     }
@@ -154,7 +204,7 @@ export default function UsefulListingsAdminPage() {
   }
 
   async function loadListings() {
-    const { data, error } = await supabase
+    const { data, error: listingError } = await supabase
       .from('businesses')
       .select(
         `
@@ -183,8 +233,8 @@ export default function UsefulListingsAdminPage() {
       .eq('listing_type', 'community')
       .order('business_name', { ascending: true })
 
-    if (error) {
-      setMessage(error.message)
+    if (listingError) {
+      setError(listingError.message)
       setListings([])
       return
     }
@@ -192,17 +242,14 @@ export default function UsefulListingsAdminPage() {
     setListings((data ?? []) as UsefulListing[])
   }
 
-  function updateField(field: keyof ReturnType<typeof emptyForm>, value: string) {
+  function updateField(field: keyof UsefulListingForm, value: string) {
     setForm((current) => ({
       ...current,
       [field]: value,
     }))
   }
 
-  function updateEditField(
-    field: keyof ReturnType<typeof emptyForm>,
-    value: string
-  ) {
+  function updateEditField(field: keyof UsefulListingForm, value: string) {
     setEditForm((current) => ({
       ...current,
       [field]: value,
@@ -211,6 +258,7 @@ export default function UsefulListingsAdminPage() {
 
   function startEdit(listing: UsefulListing) {
     setEditingId(listing.id)
+    setError('')
     setMessage('')
 
     setEditForm({
@@ -238,17 +286,18 @@ export default function UsefulListingsAdminPage() {
   async function createListing(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
+    setError('')
     setMessage('')
 
     if (!form.business_name.trim()) {
-      setMessage('Please enter a name for the listing.')
+      setError('Please enter a name for the useful listing.')
       return
     }
 
     const baseSlug = makeSlug(form.business_name)
 
     if (!baseSlug) {
-      setMessage('Please enter a valid listing name.')
+      setError('Please enter a valid listing name.')
       return
     }
 
@@ -259,19 +308,19 @@ export default function UsefulListingsAdminPage() {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      setMessage('You need to be logged in to add a useful listing.')
+      setError('You need to be logged in to add a useful listing.')
       setSaving(false)
       return
     }
 
     const slug = `${baseSlug}-${Date.now().toString().slice(-5)}`
 
-    const { error } = await supabase.from('businesses').insert({
+    const { error: insertError } = await supabase.from('businesses').insert({
       owner_id: user.id,
       business_name: form.business_name.trim(),
       slug,
       listing_type: 'community',
-      useful_listing_type: form.useful_listing_type || null,
+      useful_listing_type: form.useful_listing_type || 'Local information',
       category_id: form.category_id || null,
       description: form.description.trim() || null,
       phone: form.phone.trim() || null,
@@ -289,8 +338,8 @@ export default function UsefulListingsAdminPage() {
       is_premium: false,
     })
 
-    if (error) {
-      setMessage(error.message)
+    if (insertError) {
+      setError(insertError.message)
       setSaving(false)
       return
     }
@@ -302,21 +351,22 @@ export default function UsefulListingsAdminPage() {
   }
 
   async function saveEdit(id: string) {
+    setError('')
     setMessage('')
 
     if (!editForm.business_name.trim()) {
-      setMessage('Please enter a name for the listing.')
+      setError('Please enter a name for the useful listing.')
       return
     }
 
     setSaving(true)
 
-    const { error } = await supabase
+    const { data, error: updateError } = await supabase
       .from('businesses')
       .update({
         business_name: editForm.business_name.trim(),
         listing_type: 'community',
-        useful_listing_type: editForm.useful_listing_type || null,
+        useful_listing_type: editForm.useful_listing_type || 'Local information',
         category_id: editForm.category_id || null,
         description: editForm.description.trim() || null,
         phone: editForm.phone.trim() || null,
@@ -334,9 +384,25 @@ export default function UsefulListingsAdminPage() {
         is_premium: false,
       })
       .eq('id', id)
+      .select('id, listing_type, is_approved, status, is_featured, is_premium')
+      .single()
 
-    if (error) {
-      setMessage(error.message)
+    if (updateError) {
+      setError(updateError.message)
+      setSaving(false)
+      return
+    }
+
+    if (
+      data?.listing_type !== 'community' ||
+      data?.is_approved !== true ||
+      data?.status !== 'approved' ||
+      data?.is_featured !== false ||
+      data?.is_premium !== false
+    ) {
+      setError(
+        'The listing was saved, but the community listing rules were not applied. Please check the database fields.'
+      )
       setSaving(false)
       return
     }
@@ -348,28 +414,37 @@ export default function UsefulListingsAdminPage() {
   }
 
   async function deleteListing(id: string) {
-    const confirmed = window.confirm('Delete this useful listing?')
+    const confirmed = window.confirm(
+      'Delete this useful listing? This cannot be undone.'
+    )
 
     if (!confirmed) return
 
+    setError('')
     setMessage('')
+    setDeletingId(id)
 
-    const { error } = await supabase.from('businesses').delete().eq('id', id)
+    const { error: deleteError } = await supabase
+      .from('businesses')
+      .delete()
+      .eq('id', id)
 
-    if (error) {
-      setMessage(error.message)
+    if (deleteError) {
+      setError(deleteError.message)
+      setDeletingId(null)
       return
     }
 
     setMessage('Useful listing deleted.')
     await loadListings()
+    setDeletingId(null)
   }
 
   if (loading) {
     return (
       <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
         <section className="mx-auto max-w-6xl">
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
             Loading useful listings...
           </div>
         </section>
@@ -382,36 +457,72 @@ export default function UsefulListingsAdminPage() {
       <section className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
+            <Link
+              href="/admin"
+              className="text-sm font-semibold text-red-700 hover:underline"
+            >
+              ← Back to admin
+            </Link>
+
+            <p className="mt-5 text-sm font-semibold uppercase tracking-wide text-red-700">
               Admin
             </p>
-            <h1 className="text-3xl font-bold text-stone-950">
+
+            <h1 className="mt-2 text-3xl font-bold text-stone-950">
               Useful local listings
             </h1>
+
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
               Add and edit schools, places of worship, council services,
-              recycling centres, community venues and local public information.
+              recycling centres, community venues and useful public information.
             </p>
           </div>
 
-          <Link
-            href="/admin"
-            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-800 shadow-sm hover:bg-stone-50"
-          >
-            Back to admin
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/directory"
+              className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-800 shadow-sm hover:bg-stone-50"
+            >
+              View directory
+            </Link>
+
+            <Link
+              href="/contact?subject=request-local-amenity"
+              className="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-800"
+            >
+              Request link
+            </Link>
+          </div>
         </div>
 
+        <div className="grid gap-4 sm:grid-cols-4">
+          <StatCard label="Total" value={stats.total} />
+          <StatCard label="Schools" value={stats.schools} />
+          <StatCard label="Places of worship" value={stats.placesOfWorship} />
+          <StatCard label="Public services" value={stats.publicServices} />
+        </div>
+
+        {error ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">
+            {error}
+          </div>
+        ) : null}
+
         {message ? (
-          <div className="rounded-2xl border border-stone-200 bg-white p-4 text-sm font-semibold text-stone-800 shadow-sm">
+          <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">
             {message}
           </div>
         ) : null}
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
           <h2 className="text-xl font-bold text-stone-950">
             Add useful listing
           </h2>
+
+          <p className="mt-2 text-sm leading-6 text-stone-600">
+            These listings are added as local information, not paid business
+            adverts. Reviews, Featured and Premium flags stay disabled.
+          </p>
 
           <form onSubmit={createListing} className="mt-6 grid gap-4">
             <UsefulListingFields
@@ -432,12 +543,13 @@ export default function UsefulListingsAdminPage() {
           </form>
         </section>
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-bold text-stone-950">
                 Existing useful listings
               </h2>
+
               <p className="mt-1 text-sm text-stone-600">
                 Edit, view or delete community and public information entries.
               </p>
@@ -456,6 +568,7 @@ export default function UsefulListingsAdminPage() {
             ) : (
               listings.map((listing) => {
                 const isEditing = editingId === listing.id
+                const isDeleting = deletingId === listing.id
 
                 return (
                   <article
@@ -482,8 +595,9 @@ export default function UsefulListingsAdminPage() {
 
                           <button
                             type="button"
+                            disabled={saving}
                             onClick={cancelEdit}
-                            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-800 hover:bg-stone-100"
+                            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-800 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Cancel
                           </button>
@@ -520,6 +634,10 @@ export default function UsefulListingsAdminPage() {
 
                           <p className="mt-1 break-all text-sm text-stone-600">
                             /business/{listing.slug}
+                          </p>
+
+                          <p className="mt-1 text-xs text-stone-500">
+                            Added {formatDate(listing.created_at)}
                           </p>
 
                           {listing.description ? (
@@ -559,10 +677,11 @@ export default function UsefulListingsAdminPage() {
 
                           <button
                             type="button"
+                            disabled={isDeleting}
                             onClick={() => deleteListing(listing.id)}
-                            className="rounded-full bg-stone-900 px-4 py-2 text-sm font-bold text-white hover:bg-red-800"
+                            className="rounded-full bg-stone-900 px-4 py-2 text-sm font-bold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-stone-400"
                           >
-                            Delete
+                            {isDeleting ? 'Deleting...' : 'Delete'}
                           </button>
                         </div>
                       </div>
@@ -585,9 +704,9 @@ function UsefulListingFields({
   previewSlug,
   showPreview = false,
 }: {
-  values: ReturnType<typeof emptyForm>
+  values: UsefulListingForm
   categories: Category[]
-  onChange: (field: keyof ReturnType<typeof emptyForm>, value: string) => void
+  onChange: (field: keyof UsefulListingForm, value: string) => void
   previewSlug?: string
   showPreview?: boolean
 }) {
@@ -600,7 +719,7 @@ function UsefulListingFields({
             value={values.business_name}
             onChange={(event) => onChange('business_name', event.target.value)}
             placeholder="Example: Ollerton Recycling Centre"
-            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           />
         </label>
 
@@ -659,7 +778,7 @@ function UsefulListingFields({
           onChange={(event) => onChange('description', event.target.value)}
           rows={5}
           placeholder="Add useful information for residents."
-          className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
         />
       </label>
 
@@ -670,7 +789,7 @@ function UsefulListingFields({
             value={values.phone}
             onChange={(event) => onChange('phone', event.target.value)}
             placeholder="Telephone number"
-            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           />
         </label>
 
@@ -681,7 +800,7 @@ function UsefulListingFields({
             value={values.email}
             onChange={(event) => onChange('email', event.target.value)}
             placeholder="Email address"
-            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           />
         </label>
 
@@ -691,7 +810,7 @@ function UsefulListingFields({
             value={values.website}
             onChange={(event) => onChange('website', event.target.value)}
             placeholder="https://example.co.uk"
-            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           />
         </label>
       </div>
@@ -705,7 +824,7 @@ function UsefulListingFields({
               onChange('address_line_1', event.target.value)
             }
             placeholder="Building / street"
-            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           />
         </label>
 
@@ -717,7 +836,7 @@ function UsefulListingFields({
               onChange('address_line_2', event.target.value)
             }
             placeholder="Area / extra address info"
-            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           />
         </label>
       </div>
@@ -729,7 +848,7 @@ function UsefulListingFields({
             value={values.town}
             onChange={(event) => onChange('town', event.target.value)}
             placeholder="Ollerton"
-            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           />
         </label>
 
@@ -739,7 +858,7 @@ function UsefulListingFields({
             value={values.postcode}
             onChange={(event) => onChange('postcode', event.target.value)}
             placeholder="Postcode"
-            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           />
         </label>
 
@@ -749,7 +868,7 @@ function UsefulListingFields({
             value={values.service_area}
             onChange={(event) => onChange('service_area', event.target.value)}
             placeholder="Ollerton, Boughton, Edwinstowe..."
-            className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+            className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           />
         </label>
       </div>
@@ -761,9 +880,21 @@ function UsefulListingFields({
           onChange={(event) => onChange('opening_times', event.target.value)}
           rows={4}
           placeholder="Example: Monday to Friday, 9am to 5pm. Closed bank holidays."
-          className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
+          className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
         />
       </label>
+    </div>
+  )
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
+      <p className="text-xs font-bold uppercase tracking-wide text-red-700">
+        {label}
+      </p>
+
+      <p className="mt-2 text-3xl font-bold text-stone-950">{value}</p>
     </div>
   )
 }

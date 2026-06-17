@@ -44,6 +44,10 @@ const amenityTypes = [
   'Other',
 ]
 
+function isCommunityListing(listing: Listing) {
+  return listing.listing_type === 'community'
+}
+
 function getCategoryName(categories: CategoryRelation) {
   if (!categories) return 'Local listing'
 
@@ -65,7 +69,7 @@ function getCategorySlug(categories: CategoryRelation) {
 }
 
 function getListingLabel(listing: Listing) {
-  if (listing.listing_type === 'community') {
+  if (isCommunityListing(listing)) {
     return listing.useful_listing_type || 'Local information'
   }
 
@@ -129,8 +133,6 @@ function DirectoryContent() {
         `
         )
         .eq('is_approved', true)
-        .order('is_featured', { ascending: false })
-        .order('is_premium', { ascending: false })
         .order('business_name', { ascending: true }),
     ])
 
@@ -189,23 +191,25 @@ function DirectoryContent() {
 
         const matchesCategory = selectedCategory
           ? selectedCategory.startsWith('amenity:')
-            ? listing.listing_type === 'community' &&
-              listing.useful_listing_type === selectedCategory.replace('amenity:', '')
+            ? isCommunityListing(listing) &&
+              listing.useful_listing_type ===
+                selectedCategory.replace('amenity:', '')
             : categorySlug === selectedCategory
           : true
 
-        const matchesTown = selectedTown
-          ? listing.town === selectedTown
-          : true
+        const matchesTown = selectedTown ? listing.town === selectedTown : true
 
         return matchesSearch && matchesCategory && matchesTown
       })
       .sort((a, b) => {
-        const aFeatured = a.is_featured === true
-        const bFeatured = b.is_featured === true
+        const aIsCommunity = isCommunityListing(a)
+        const bIsCommunity = isCommunityListing(b)
 
-        const aPremium = a.is_premium === true
-        const bPremium = b.is_premium === true
+        const aFeatured = a.is_featured === true && !aIsCommunity
+        const bFeatured = b.is_featured === true && !bIsCommunity
+
+        const aPremium = a.is_premium === true && !aIsCommunity
+        const bPremium = b.is_premium === true && !bIsCommunity
 
         if (aFeatured && !bFeatured) return -1
         if (!aFeatured && bFeatured) return 1
@@ -227,7 +231,7 @@ function DirectoryContent() {
     return (
       <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
         <section className="mx-auto max-w-6xl">
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
             Loading directory...
           </div>
         </section>
@@ -244,9 +248,7 @@ function DirectoryContent() {
               Ollerton Hub
             </p>
 
-            <h1 className="text-3xl font-bold text-stone-950">
-              Directory
-            </h1>
+            <h1 className="text-3xl font-bold text-stone-950">Directory</h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
               Search local businesses, services, schools, places of worship,
@@ -268,7 +270,7 @@ function DirectoryContent() {
           </div>
         ) : null}
 
-        <section className="rounded-3xl bg-white p-5 shadow-sm">
+        <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
           <div className="grid gap-4 lg:grid-cols-4">
             <label className="grid gap-2 text-sm font-semibold text-stone-800 lg:col-span-2">
               Search
@@ -281,7 +283,7 @@ function DirectoryContent() {
             </label>
 
             <label className="grid gap-2 text-sm font-semibold text-stone-800">
-              Category
+              Category or place type
               <select
                 value={selectedCategory}
                 onChange={(event) => setSelectedCategory(event.target.value)}
@@ -317,6 +319,7 @@ function DirectoryContent() {
                 className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
               >
                 <option value="">All towns</option>
+
                 {towns.map((town) => (
                   <option key={town} value={town}>
                     {town}
@@ -344,10 +347,11 @@ function DirectoryContent() {
 
         <section>
           {filteredListings.length === 0 ? (
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
               <h2 className="text-xl font-bold text-stone-950">
                 No listings found
               </h2>
+
               <p className="mt-2 text-sm leading-6 text-stone-700">
                 Try a different search term, category or town.
               </p>
@@ -356,12 +360,13 @@ function DirectoryContent() {
             <div className="grid gap-4 md:grid-cols-2">
               {filteredListings.map((listing) => {
                 const categoryName = getCategoryName(listing.categories)
+                const isCommunity = isCommunityListing(listing)
 
                 return (
                   <Link
                     key={listing.id}
                     href={`/business/${listing.slug}`}
-                    className="rounded-3xl bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                    className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-200 transition hover:-translate-y-1 hover:shadow-md"
                   >
                     <div className="flex items-start gap-4">
                       <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-stone-200 text-lg font-bold text-stone-700">
@@ -383,15 +388,21 @@ function DirectoryContent() {
                             {listing.business_name}
                           </h2>
 
-                          {listing.is_featured ? (
+                          {listing.is_featured && !isCommunity ? (
                             <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
                               Featured
                             </span>
                           ) : null}
 
-                          {listing.is_premium ? (
+                          {listing.is_premium && !isCommunity ? (
                             <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">
                               Premium
+                            </span>
+                          ) : null}
+
+                          {isCommunity ? (
+                            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800">
+                              Local info
                             </span>
                           ) : null}
                         </div>
@@ -448,7 +459,7 @@ export default function DirectoryPage() {
       fallback={
         <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
           <section className="mx-auto max-w-6xl">
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
               Loading directory...
             </div>
           </section>
