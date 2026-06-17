@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { countWords } from '@/lib/listingLimits'
 
 type Category = {
   id: string
@@ -15,6 +16,7 @@ type Business = {
   business_name: string
   slug: string
   category_id: string | null
+  listing_type: string | null
   description: string | null
   services: string | null
   phone: string | null
@@ -32,6 +34,9 @@ type Business = {
   is_approved: boolean
   is_featured: boolean
   is_premium: boolean
+  use_external_reviews: boolean | null
+  external_review_platform: string | null
+  external_review_url: string | null
 }
 
 type FormState = {
@@ -53,6 +58,9 @@ type FormState = {
   logo_url: string
   is_featured: boolean
   is_premium: boolean
+  use_external_reviews: boolean
+  external_review_platform: string
+  external_review_url: string
 }
 
 type ListingTier = 'free' | 'featured' | 'premium'
@@ -91,6 +99,9 @@ const emptyForm: FormState = {
   logo_url: '',
   is_featured: false,
   is_premium: false,
+  use_external_reviews: false,
+  external_review_platform: '',
+  external_review_url: '',
 }
 
 function makeSlug(value: string) {
@@ -102,11 +113,9 @@ function makeSlug(value: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-function countWords(value: string) {
-  return value.trim().split(/\s+/).filter(Boolean).length
-}
-
-function getListingTier(form: Pick<FormState, 'is_featured' | 'is_premium'>): ListingTier {
+function getListingTier(
+  form: Pick<FormState, 'is_featured' | 'is_premium'>
+): ListingTier {
   if (form.is_premium) return 'premium'
   if (form.is_featured) return 'featured'
   return 'free'
@@ -116,6 +125,18 @@ function getTierLabel(tier: ListingTier) {
   if (tier === 'premium') return 'Premium'
   if (tier === 'featured') return 'Featured'
   return 'Free'
+}
+
+function normaliseUrl(value: string) {
+  const trimmedValue = value.trim()
+
+  if (!trimmedValue) return ''
+
+  if (/^https?:\/\//i.test(trimmedValue)) {
+    return trimmedValue
+  }
+
+  return `https://${trimmedValue}`
 }
 
 export default function BusinessDashboardPage() {
@@ -131,8 +152,11 @@ export default function BusinessDashboardPage() {
 
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [notice, setNotice] = useState('')
 
-  const tier = getListingTier(form)
+  const isBusinessListing = (business?.listing_type ?? 'business') === 'business'
+
+  const tier = isBusinessListing ? getListingTier(form) : 'free'
   const tierLabel = getTierLabel(tier)
 
   const descriptionWords = countWords(form.description)
@@ -148,9 +172,39 @@ export default function BusinessDashboardPage() {
     loadPage()
   }, [])
 
+  function loadBusinessIntoForm(loadedBusiness: Business) {
+    setBusiness(loadedBusiness)
+
+    setForm({
+      business_name: loadedBusiness.business_name ?? '',
+      category_id: loadedBusiness.category_id ?? '',
+      description: loadedBusiness.description ?? '',
+      services: loadedBusiness.services ?? '',
+      phone: loadedBusiness.phone ?? '',
+      email: loadedBusiness.email ?? '',
+      website: loadedBusiness.website ?? '',
+      facebook: loadedBusiness.facebook ?? '',
+      instagram: loadedBusiness.instagram ?? '',
+      address_line_1: loadedBusiness.address_line_1 ?? '',
+      address_line_2: loadedBusiness.address_line_2 ?? '',
+      town: loadedBusiness.town ?? '',
+      postcode: loadedBusiness.postcode ?? '',
+      service_area: loadedBusiness.service_area ?? '',
+      opening_times: loadedBusiness.opening_times ?? '',
+      logo_url: loadedBusiness.logo_url ?? '',
+      is_featured: loadedBusiness.is_featured ?? false,
+      is_premium: loadedBusiness.is_premium ?? false,
+      use_external_reviews: loadedBusiness.use_external_reviews ?? false,
+      external_review_platform: loadedBusiness.external_review_platform ?? '',
+      external_review_url: loadedBusiness.external_review_url ?? '',
+    })
+  }
+
   async function loadPage() {
     setLoading(true)
     setError('')
+    setSuccess('')
+    setNotice('')
 
     const {
       data: { user },
@@ -161,14 +215,20 @@ export default function BusinessDashboardPage() {
       return
     }
 
-    const { data: categoryData } = await supabase
+    const { data: categoryData, error: categoryError } = await supabase
       .from('categories')
       .select('id, name')
       .order('name', { ascending: true })
 
+    if (categoryError) {
+      setError(`Could not load categories: ${categoryError.message}`)
+      setLoading(false)
+      return
+    }
+
     setCategories((categoryData as Category[] | null) ?? [])
 
-    const { data: businessData } = await supabase
+    const { data: businessRows, error: businessError } = await supabase
       .from('businesses')
       .select(
         `
@@ -176,6 +236,7 @@ export default function BusinessDashboardPage() {
         business_name,
         slug,
         category_id,
+        listing_type,
         description,
         services,
         phone,
@@ -192,38 +253,39 @@ export default function BusinessDashboardPage() {
         logo_url,
         is_approved,
         is_featured,
-        is_premium
+        is_premium,
+        use_external_reviews,
+        external_review_platform,
+        external_review_url
       `
       )
       .eq('owner_id', user.id)
-      .maybeSingle()
+      .order('created_at', { ascending: false })
+      .limit(2)
 
-    if (businessData) {
-      const loadedBusiness = businessData as Business
-
-      setBusiness(loadedBusiness)
-
-      setForm({
-        business_name: loadedBusiness.business_name ?? '',
-        category_id: loadedBusiness.category_id ?? '',
-        description: loadedBusiness.description ?? '',
-        services: loadedBusiness.services ?? '',
-        phone: loadedBusiness.phone ?? '',
-        email: loadedBusiness.email ?? '',
-        website: loadedBusiness.website ?? '',
-        facebook: loadedBusiness.facebook ?? '',
-        instagram: loadedBusiness.instagram ?? '',
-        address_line_1: loadedBusiness.address_line_1 ?? '',
-        address_line_2: loadedBusiness.address_line_2 ?? '',
-        town: loadedBusiness.town ?? '',
-        postcode: loadedBusiness.postcode ?? '',
-        service_area: loadedBusiness.service_area ?? '',
-        opening_times: loadedBusiness.opening_times ?? '',
-        logo_url: loadedBusiness.logo_url ?? '',
-        is_featured: loadedBusiness.is_featured ?? false,
-        is_premium: loadedBusiness.is_premium ?? false,
-      })
+    if (businessError) {
+      setError(`Could not load your business listing: ${businessError.message}`)
+      setLoading(false)
+      return
     }
+
+    if (!businessRows || businessRows.length === 0) {
+      setBusiness(null)
+      setForm(emptyForm)
+      setNotice(
+        'No existing business listing was found for this signed-in account. You can create one below.'
+      )
+      setLoading(false)
+      return
+    }
+
+    if (businessRows.length > 1) {
+      setNotice(
+        'More than one business listing is assigned to this account. The newest listing has been loaded.'
+      )
+    }
+
+    loadBusinessIntoForm(businessRows[0] as Business)
 
     setLoading(false)
   }
@@ -236,6 +298,15 @@ export default function BusinessDashboardPage() {
     setForm((current) => ({
       ...current,
       [name]: value,
+    }))
+  }
+
+  function updateCheckbox(event: ChangeEvent<HTMLInputElement>) {
+    const { name, checked } = event.target
+
+    setForm((current) => ({
+      ...current,
+      [name]: checked,
     }))
   }
 
@@ -253,6 +324,7 @@ export default function BusinessDashboardPage() {
     } = await supabase.auth.getUser()
 
     if (!user) {
+      setUploadingLogo(false)
       router.push('/login')
       return
     }
@@ -292,6 +364,7 @@ export default function BusinessDashboardPage() {
 
     setError('')
     setSuccess('')
+    setNotice('')
 
     if (!form.business_name.trim()) {
       setError('Business name is required.')
@@ -317,6 +390,19 @@ export default function BusinessDashboardPage() {
       return
     }
 
+    const useExternalReviews = isBusinessListing && form.use_external_reviews
+    const externalReviewUrl = normaliseUrl(form.external_review_url)
+
+    if (useExternalReviews && !form.external_review_platform.trim()) {
+      setError('Please choose the external review platform.')
+      return
+    }
+
+    if (useExternalReviews && !externalReviewUrl) {
+      setError('Please add your external review link, or turn external reviews off.')
+      return
+    }
+
     setSaving(true)
 
     const {
@@ -324,6 +410,7 @@ export default function BusinessDashboardPage() {
     } = await supabase.auth.getUser()
 
     if (!user) {
+      setSaving(false)
       router.push('/login')
       return
     }
@@ -341,13 +428,14 @@ export default function BusinessDashboardPage() {
       business_name: form.business_name.trim(),
       slug,
       category_id: form.category_id || null,
+      listing_type: business?.listing_type ?? 'business',
       description: form.description.trim() || null,
       services: form.services.trim() || null,
       phone: form.phone.trim() || null,
       email: form.email.trim() || null,
-      website: form.website.trim() || null,
-      facebook: form.facebook.trim() || null,
-      instagram: form.instagram.trim() || null,
+      website: normaliseUrl(form.website) || null,
+      facebook: normaliseUrl(form.facebook) || null,
+      instagram: normaliseUrl(form.instagram) || null,
       address_line_1: form.address_line_1.trim() || null,
       address_line_2: form.address_line_2.trim() || null,
       town: form.town.trim() || null,
@@ -355,39 +443,28 @@ export default function BusinessDashboardPage() {
       service_area: form.service_area.trim() || null,
       opening_times: form.opening_times.trim() || null,
       logo_url: form.logo_url.trim() || null,
+      use_external_reviews: useExternalReviews,
+      external_review_platform: useExternalReviews
+        ? form.external_review_platform.trim()
+        : null,
+      external_review_url: useExternalReviews ? externalReviewUrl : null,
       is_approved: false,
       status: 'pending',
       updated_at: new Date().toISOString(),
     }
 
     if (business) {
-      const { error: updateError } = await supabase
+      const { data: updatedBusiness, error: updateError } = await supabase
         .from('businesses')
         .update(payload)
         .eq('id', business.id)
-
-      if (updateError) {
-        setError(updateError.message)
-        setSaving(false)
-        return
-      }
-
-      setSuccess('Business listing saved. Changes are now awaiting approval.')
-    } else {
-      const { data: insertedBusiness, error: insertError } = await supabase
-        .from('businesses')
-        .insert({
-          ...payload,
-          is_featured: false,
-          is_premium: false,
-          created_at: new Date().toISOString(),
-        })
         .select(
           `
           id,
           business_name,
           slug,
           category_id,
+          listing_type,
           description,
           services,
           phone,
@@ -404,21 +481,76 @@ export default function BusinessDashboardPage() {
           logo_url,
           is_approved,
           is_featured,
-          is_premium
+          is_premium,
+          use_external_reviews,
+          external_review_platform,
+          external_review_url
         `
         )
         .single()
 
-      if (insertError) {
-        setError(insertError.message)
+      if (updateError) {
+        setError(updateError.message)
         setSaving(false)
         return
       }
 
-      setBusiness(insertedBusiness as Business)
-      setSuccess('Business listing created. It is now awaiting approval.')
+      loadBusinessIntoForm(updatedBusiness as Business)
+
+      setSuccess('Business listing saved. Changes are now awaiting approval.')
+      setSaving(false)
+      return
     }
 
+    const { data: insertedBusiness, error: insertError } = await supabase
+      .from('businesses')
+      .insert({
+        ...payload,
+        listing_type: 'business',
+        is_featured: false,
+        is_premium: false,
+        created_at: new Date().toISOString(),
+      })
+      .select(
+        `
+        id,
+        business_name,
+        slug,
+        category_id,
+        listing_type,
+        description,
+        services,
+        phone,
+        email,
+        website,
+        facebook,
+        instagram,
+        address_line_1,
+        address_line_2,
+        town,
+        postcode,
+        service_area,
+        opening_times,
+        logo_url,
+        is_approved,
+        is_featured,
+        is_premium,
+        use_external_reviews,
+        external_review_platform,
+        external_review_url
+      `
+      )
+      .single()
+
+    if (insertError) {
+      setError(insertError.message)
+      setSaving(false)
+      return
+    }
+
+    loadBusinessIntoForm(insertedBusiness as Business)
+
+    setSuccess('Business listing created. It is now awaiting approval.')
     setSaving(false)
   }
 
@@ -460,9 +592,11 @@ export default function BusinessDashboardPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
-                {tierLabel} listing
-              </span>
+              {isBusinessListing && (
+                <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
+                  {tierLabel} listing
+                </span>
+              )}
 
               {business?.is_approved ? (
                 <span className="rounded-xl bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
@@ -477,49 +611,51 @@ export default function BusinessDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
-                Word limits
-              </p>
+        {isBusinessListing && (
+          <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
+                  Word limits
+                </p>
 
-              <h2 className="mt-1 text-xl font-bold text-stone-950">
-                Your current plan: {tierLabel}
-              </h2>
+                <h2 className="mt-1 text-xl font-bold text-stone-950">
+                  Your current plan: {tierLabel}
+                </h2>
 
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-                Free listings have shorter descriptions. Featured and Premium
-                listings allow more space to describe your business and services.
-              </p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+                  Free listings have shorter descriptions. Featured and Premium
+                  listings allow more space to describe your business and services.
+                </p>
+              </div>
+
+              {!form.is_premium && (
+                <Link
+                  href="/contact"
+                  className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                >
+                  Ask about upgrading
+                </Link>
+              )}
             </div>
 
-            {!form.is_premium && (
-              <Link
-                href="/contact"
-                className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
-              >
-                Ask about upgrading
-              </Link>
-            )}
-          </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <LimitCard
+                title="Description"
+                used={descriptionWords}
+                limit={descriptionLimit}
+                overLimit={descriptionOverLimit}
+              />
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <LimitCard
-              title="Description"
-              used={descriptionWords}
-              limit={descriptionLimit}
-              overLimit={descriptionOverLimit}
-            />
-
-            <LimitCard
-              title="Services"
-              used={servicesWords}
-              limit={servicesLimit}
-              overLimit={servicesOverLimit}
-            />
-          </div>
-        </section>
+              <LimitCard
+                title="Services"
+                used={servicesWords}
+                limit={servicesLimit}
+                overLimit={servicesOverLimit}
+              />
+            </div>
+          </section>
+        )}
 
         <form
           onSubmit={saveBusiness}
@@ -534,6 +670,12 @@ export default function BusinessDashboardPage() {
           {success && (
             <div className="rounded-2xl bg-green-50 p-4 text-sm font-medium text-green-800 ring-1 ring-green-200">
               {success}
+            </div>
+          )}
+
+          {notice && (
+            <div className="rounded-2xl bg-amber-50 p-4 text-sm font-medium text-amber-800 ring-1 ring-amber-200">
+              {notice}
             </div>
           )}
 
@@ -658,6 +800,80 @@ export default function BusinessDashboardPage() {
               overLimit={servicesOverLimit}
             />
           </section>
+
+          {isBusinessListing && (
+            <section className="rounded-2xl bg-stone-50 p-5 ring-1 ring-stone-200">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-stone-950">
+                    Reviews
+                  </h2>
+
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
+                    You can collect reviews directly through Ollerton Hub, or send
+                    visitors to an existing review page such as Google,
+                    Trustpilot or Facebook.
+                  </p>
+                </div>
+
+                <span className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-stone-700 ring-1 ring-stone-200">
+                  Business only
+                </span>
+              </div>
+
+              <label className="mt-5 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  name="use_external_reviews"
+                  checked={form.use_external_reviews}
+                  onChange={updateCheckbox}
+                  className="mt-1 h-4 w-4 rounded border-stone-300 text-red-700 focus:ring-red-600"
+                />
+
+                <span>
+                  <span className="block text-sm font-semibold text-stone-900">
+                    Use an external review page
+                  </span>
+
+                  <span className="mt-1 block text-sm text-stone-600">
+                    This will show a button to your chosen review platform on your
+                    public listing.
+                  </span>
+                </span>
+              </label>
+
+              {form.use_external_reviews && (
+                <div className="mt-5 grid gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-semibold text-stone-800">
+                      Review platform
+                    </label>
+
+                    <select
+                      name="external_review_platform"
+                      value={form.external_review_platform}
+                      onChange={updateField}
+                      className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
+                    >
+                      <option value="">Choose a platform</option>
+                      <option value="Google">Google</option>
+                      <option value="Trustpilot">Trustpilot</option>
+                      <option value="Facebook">Facebook</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <TextInput
+                    label="External review link"
+                    name="external_review_url"
+                    value={form.external_review_url}
+                    onChange={updateField}
+                    placeholder="https://..."
+                  />
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="grid gap-5 md:grid-cols-2">
             <TextInput
