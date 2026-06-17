@@ -4,7 +4,6 @@ import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { countWords } from '@/lib/listingLimits'
 
 type Category = {
   id: string
@@ -65,7 +64,13 @@ type FormState = {
 
 type ListingTier = 'free' | 'featured' | 'premium'
 
-const WORD_LIMITS = {
+const WORD_LIMITS: Record<
+  ListingTier,
+  {
+    description: number
+    services: number
+  }
+> = {
   free: {
     description: 50,
     services: 40,
@@ -113,6 +118,27 @@ function makeSlug(value: string) {
     .replace(/^-+|-+$/g, '')
 }
 
+function normaliseUrl(value: string) {
+  const trimmedValue = value.trim()
+
+  if (!trimmedValue) return ''
+
+  if (/^https?:\/\//i.test(trimmedValue)) {
+    return trimmedValue
+  }
+
+  return `https://${trimmedValue}`
+}
+
+function countWords(value: string | null | undefined) {
+  if (!value) return 0
+
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
+}
+
 function getListingTier(
   form: Pick<FormState, 'is_featured' | 'is_premium'>
 ): ListingTier {
@@ -125,18 +151,6 @@ function getTierLabel(tier: ListingTier) {
   if (tier === 'premium') return 'Premium'
   if (tier === 'featured') return 'Featured'
   return 'Free'
-}
-
-function normaliseUrl(value: string) {
-  const trimmedValue = value.trim()
-
-  if (!trimmedValue) return ''
-
-  if (/^https?:\/\//i.test(trimmedValue)) {
-    return trimmedValue
-  }
-
-  return `https://${trimmedValue}`
 }
 
 export default function BusinessDashboardPage() {
@@ -208,7 +222,14 @@ export default function BusinessDashboardPage() {
 
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser()
+
+    if (userError) {
+      setError(userError.message)
+      setLoading(false)
+      return
+    }
 
     if (!user) {
       router.push('/login')
@@ -286,7 +307,6 @@ export default function BusinessDashboardPage() {
     }
 
     loadBusinessIntoForm(businessRows[0] as Business)
-
     setLoading(false)
   }
 
@@ -317,11 +337,19 @@ export default function BusinessDashboardPage() {
 
     setError('')
     setSuccess('')
+    setNotice('')
     setUploadingLogo(true)
 
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser()
+
+    if (userError) {
+      setError(userError.message)
+      setUploadingLogo(false)
+      return
+    }
 
     if (!user) {
       setUploadingLogo(false)
@@ -407,7 +435,14 @@ export default function BusinessDashboardPage() {
 
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser()
+
+    if (userError) {
+      setError(userError.message)
+      setSaving(false)
+      return
+    }
 
     if (!user) {
       setSaving(false)
@@ -496,7 +531,6 @@ export default function BusinessDashboardPage() {
       }
 
       loadBusinessIntoForm(updatedBusiness as Business)
-
       setSuccess('Business listing saved. Changes are now awaiting approval.')
       setSaving(false)
       return
@@ -506,7 +540,6 @@ export default function BusinessDashboardPage() {
       .from('businesses')
       .insert({
         ...payload,
-        listing_type: 'business',
         is_featured: false,
         is_premium: false,
         created_at: new Date().toISOString(),
@@ -549,7 +582,6 @@ export default function BusinessDashboardPage() {
     }
 
     loadBusinessIntoForm(insertedBusiness as Business)
-
     setSuccess('Business listing created. It is now awaiting approval.')
     setSaving(false)
   }
@@ -1078,9 +1110,7 @@ function LimitCard({
           : 'bg-stone-50 ring-stone-200'
       }`}
     >
-      <p className="text-sm font-semibold text-stone-900">
-        {title}
-      </p>
+      <p className="text-sm font-semibold text-stone-900">{title}</p>
 
       <p
         className={`mt-1 text-sm ${
