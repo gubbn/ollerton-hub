@@ -9,10 +9,24 @@ type Business = {
   id: string
   business_name: string
   slug: string
+  listing_type: string | null
+  useful_listing_type: string | null
 }
 
 function settingEnabled(value: string | null | undefined) {
   return value !== 'false'
+}
+
+function isCommunityListing(business: Business) {
+  return business.listing_type === 'community'
+}
+
+function getListingTypeLabel(business: Business) {
+  if (isCommunityListing(business)) {
+    return business.useful_listing_type || 'Local amenity'
+  }
+
+  return 'Business'
 }
 
 export default function ReviewPage() {
@@ -34,18 +48,32 @@ export default function ReviewPage() {
 
   useEffect(() => {
     async function loadPage() {
-      const { data: businessData } = await supabase
-        .from('businesses')
-        .select('id, business_name, slug')
-        .eq('slug', slug)
-        .eq('is_approved', true)
-        .single()
+      setLoading(true)
+      setError('')
 
-      const { data: settingData } = await supabase
-        .from('site_settings')
-        .select('setting_value')
-        .eq('setting_key', 'review_moderation')
-        .single()
+      const [{ data: businessData }, { data: settingData }] =
+        await Promise.all([
+          supabase
+            .from('businesses')
+            .select(
+              `
+              id,
+              business_name,
+              slug,
+              listing_type,
+              useful_listing_type
+            `
+            )
+            .eq('slug', slug)
+            .eq('is_approved', true)
+            .single(),
+
+          supabase
+            .from('site_settings')
+            .select('setting_value')
+            .eq('setting_key', 'review_moderation')
+            .single(),
+        ])
 
       setBusiness(businessData as Business | null)
       setReviewModeration(settingEnabled(settingData?.setting_value))
@@ -55,14 +83,20 @@ export default function ReviewPage() {
     loadPage()
   }, [slug])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
 
     if (!business) return
 
     setSaving(true)
     setMessage('')
     setError('')
+
+    if (isCommunityListing(business)) {
+      setError('Reviews are disabled for local amenities.')
+      setSaving(false)
+      return
+    }
 
     if (!reviewerName.trim()) {
       setError('Please enter your name.')
@@ -78,7 +112,7 @@ export default function ReviewPage() {
 
     const shouldAutoApprove = !reviewModeration
 
-    const { error } = await supabase.from('reviews').insert({
+    const { error: insertError } = await supabase.from('reviews').insert({
       business_id: business.id,
       reviewer_name: reviewerName.trim(),
       reviewer_email: reviewerEmail.trim() || null,
@@ -87,8 +121,8 @@ export default function ReviewPage() {
       is_approved: shouldAutoApprove,
     })
 
-    if (error) {
-      setError(error.message)
+    if (insertError) {
+      setError(insertError.message)
     } else {
       setReviewerName('')
       setReviewerEmail('')
@@ -108,7 +142,9 @@ export default function ReviewPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-stone-100 px-6 py-12 text-stone-900">
-        Loading...
+        <div className="mx-auto max-w-xl rounded-3xl bg-white p-8 shadow-sm ring-1 ring-stone-200">
+          Loading...
+        </div>
       </main>
     )
   }
@@ -116,11 +152,68 @@ export default function ReviewPage() {
   if (!business) {
     return (
       <main className="min-h-screen bg-stone-100 px-6 py-12 text-stone-900">
-        <div className="mx-auto max-w-xl rounded-3xl bg-white p-8 shadow-lg">
-          <h1 className="text-2xl font-bold">Business not found</h1>
-          <Link href="/directory" className="mt-4 block font-semibold underline">
+        <div className="mx-auto max-w-xl rounded-3xl bg-white p-8 shadow-sm ring-1 ring-stone-200">
+          <h1 className="text-2xl font-bold text-stone-950">
+            Listing not found
+          </h1>
+
+          <p className="mt-3 text-stone-700">
+            This listing may have been removed or is not currently approved.
+          </p>
+
+          <Link
+            href="/directory"
+            className="mt-5 inline-flex rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
+          >
             Back to directory
           </Link>
+        </div>
+      </main>
+    )
+  }
+
+  if (isCommunityListing(business)) {
+    return (
+      <main className="min-h-screen bg-stone-100 px-6 py-12 text-stone-900">
+        <div className="mx-auto max-w-xl">
+          <Link
+            href={`/business/${business.slug}`}
+            className="font-semibold text-stone-900 underline"
+          >
+            Back to listing
+          </Link>
+
+          <div className="mt-6 rounded-3xl bg-white p-8 shadow-sm ring-1 ring-stone-200">
+            <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
+              {getListingTypeLabel(business)}
+            </p>
+
+            <h1 className="mt-2 text-3xl font-bold text-stone-950">
+              Reviews are disabled
+            </h1>
+
+            <p className="mt-3 leading-7 text-stone-700">
+              {business.business_name} is included on Ollerton Hub as useful
+              local information rather than as a business listing, so reviews
+              are not collected here.
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href={`/business/${business.slug}`}
+                className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
+              >
+                Back to listing
+              </Link>
+
+              <Link
+                href={`/contact?subject=Report Listing&business=${business.slug}`}
+                className="rounded-xl border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-900 hover:bg-stone-50"
+              >
+                Suggest an update
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
     )
@@ -136,18 +229,24 @@ export default function ReviewPage() {
           Back to business
         </Link>
 
-        <div className="mt-6 rounded-3xl bg-white p-8 shadow-lg ring-1 ring-stone-200">
-          <h1 className="text-3xl font-bold">Leave a review</h1>
+        <div className="mt-6 rounded-3xl bg-white p-8 shadow-sm ring-1 ring-stone-200">
+          <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
+            Business review
+          </p>
+
+          <h1 className="mt-2 text-3xl font-bold text-stone-950">
+            Leave a review
+          </h1>
 
           <p className="mt-2 text-stone-700">
             Share your experience with {business.business_name}.
           </p>
 
-          {reviewModeration && (
+          {reviewModeration ? (
             <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
               Reviews are checked before appearing publicly.
             </p>
-          )}
+          ) : null}
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             <div>
@@ -155,7 +254,7 @@ export default function ReviewPage() {
               <input
                 className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
                 value={reviewerName}
-                onChange={(e) => setReviewerName(e.target.value)}
+                onChange={(event) => setReviewerName(event.target.value)}
                 required
               />
             </div>
@@ -171,7 +270,7 @@ export default function ReviewPage() {
                 className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
                 type="email"
                 value={reviewerEmail}
-                onChange={(e) => setReviewerEmail(e.target.value)}
+                onChange={(event) => setReviewerEmail(event.target.value)}
               />
             </div>
 
@@ -180,7 +279,7 @@ export default function ReviewPage() {
               <select
                 className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 focus:border-stone-900 focus:outline-none"
                 value={rating}
-                onChange={(e) => setRating(Number(e.target.value))}
+                onChange={(event) => setRating(Number(event.target.value))}
               >
                 <option value={5}>5 stars</option>
                 <option value={4}>4 stars</option>
@@ -195,12 +294,13 @@ export default function ReviewPage() {
               <textarea
                 className="min-h-32 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:outline-none"
                 value={reviewText}
-                onChange={(e) => setReviewText(e.target.value)}
+                onChange={(event) => setReviewText(event.target.value)}
                 required
               />
             </div>
 
             <button
+              type="submit"
               disabled={saving}
               className="w-full rounded-xl bg-red-700 px-4 py-3 font-semibold text-white hover:bg-red-800 disabled:opacity-60"
             >
@@ -208,17 +308,17 @@ export default function ReviewPage() {
             </button>
           </form>
 
-          {error && (
+          {error ? (
             <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
               {error}
             </p>
-          )}
+          ) : null}
 
-          {message && (
+          {message ? (
             <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-700">
               {message}
             </p>
-          )}
+          ) : null}
         </div>
       </div>
     </main>

@@ -28,6 +28,9 @@ type Business = {
   opening_times: string | null
   logo_url: string | null
   is_featured: boolean
+  is_premium: boolean | null
+  listing_type: string | null
+  useful_listing_type: string | null
   categories: CategoryRelation
 }
 
@@ -39,9 +42,24 @@ type Review = {
 }
 
 function getCategoryName(categories: CategoryRelation) {
-  if (!categories) return 'Local business'
-  if (Array.isArray(categories)) return categories[0]?.name ?? 'Local business'
+  if (!categories) return 'Local listing'
+  if (Array.isArray(categories)) return categories[0]?.name ?? 'Local listing'
   return categories.name
+}
+
+function isCommunityListing(business: Business) {
+  return business.listing_type === 'community'
+}
+
+function getListingTypeLabel(business: Business) {
+  if (isCommunityListing(business)) {
+    return business.useful_listing_type || 'Useful local information'
+  }
+
+  if (business.is_premium) return 'Premium business'
+  if (business.is_featured) return 'Featured business'
+
+  return getCategoryName(business.categories)
 }
 
 function cleanWebsiteUrl(url: string) {
@@ -61,7 +79,8 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
   const { data: businessData } = await supabase
     .from('businesses')
-    .select(`
+    .select(
+      `
       id,
       business_name,
       slug,
@@ -80,10 +99,14 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
       opening_times,
       logo_url,
       is_featured,
+      is_premium,
+      listing_type,
+      useful_listing_type,
       categories (
         name
       )
-    `)
+    `
+    )
     .eq('slug', slug)
     .eq('is_approved', true)
     .single()
@@ -91,15 +114,20 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
   if (!businessData) notFound()
 
   const business = businessData as Business
+  const isCommunity = isCommunityListing(business)
 
-  const { data: reviewData } = await supabase
-    .from('reviews')
-    .select('id, reviewer_name, rating, review_text')
-    .eq('business_id', business.id)
-    .eq('is_approved', true)
-    .order('created_at', { ascending: false })
+  let reviews: Review[] = []
 
-  const reviews = (reviewData as Review[] | null) ?? []
+  if (!isCommunity) {
+    const { data: reviewData } = await supabase
+      .from('reviews')
+      .select('id, reviewer_name, rating, review_text')
+      .eq('business_id', business.id)
+      .eq('is_approved', true)
+      .order('created_at', { ascending: false })
+
+    reviews = (reviewData as Review[] | null) ?? []
+  }
 
   const averageRating =
     reviews.length > 0
@@ -109,7 +137,9 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
   return (
     <main className="min-h-screen bg-stone-100 text-stone-900">
-      <BusinessStatTracker businessId={business.id} eventType="profile_view" />
+      {!isCommunity ? (
+        <BusinessStatTracker businessId={business.id} eventType="profile_view" />
+      ) : null}
 
       <section className="bg-stone-900 px-6 py-10 text-white">
         <div className="mx-auto max-w-5xl">
@@ -119,11 +149,12 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
           <div className="mt-8 rounded-3xl bg-white/10 p-6">
             <p className="text-sm font-semibold uppercase tracking-wide text-red-300">
-              {getCategoryName(business.categories)}
+              {getListingTypeLabel(business)}
             </p>
 
             <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center">
               {business.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={business.logo_url}
                   alt={`${business.business_name} logo`}
@@ -140,20 +171,38 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                   {business.business_name}
                 </h1>
 
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-200">
+                  {isCommunity
+                    ? 'Useful local information for residents in and around Ollerton.'
+                    : 'Local business information, services and contact details.'}
+                </p>
+
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {business.is_featured && (
+                  {isCommunity ? (
+                    <span className="inline-block rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">
+                      Local amenity
+                    </span>
+                  ) : null}
+
+                  {business.is_featured && !isCommunity ? (
                     <span className="inline-block rounded-full bg-red-600 px-3 py-1 text-sm font-semibold text-white">
                       Featured listing
                     </span>
-                  )}
+                  ) : null}
+
+                  {business.is_premium && !isCommunity ? (
+                    <span className="inline-block rounded-full bg-white px-3 py-1 text-sm font-semibold text-stone-900">
+                      Premium listing
+                    </span>
+                  ) : null}
                 </div>
 
-                {averageRating !== null && (
+                {averageRating !== null && !isCommunity ? (
                   <p className="mt-3 text-stone-100">
                     ⭐ {averageRating.toFixed(1)} from {reviews.length} review
                     {reviews.length === 1 ? '' : 's'}
                   </p>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -164,107 +213,156 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
         <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-              <h2 className="text-xl font-bold">About</h2>
+              <h2 className="text-xl font-bold">
+                {isCommunity ? 'About this local amenity' : 'About'}
+              </h2>
+
               <p className="mt-3 whitespace-pre-line text-stone-700">
-                {business.description ?? 'No description added yet.'}
+                {business.description ??
+                  (isCommunity
+                    ? 'No information has been added yet.'
+                    : 'No description added yet.')}
               </p>
             </div>
 
-            {business.services && (
+            {business.services ? (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-                <h2 className="text-xl font-bold">Services</h2>
+                <h2 className="text-xl font-bold">
+                  {isCommunity ? 'Information' : 'Services'}
+                </h2>
+
                 <p className="mt-3 whitespace-pre-line text-stone-700">
                   {business.services}
                 </p>
               </div>
+            ) : null}
+
+            {!isCommunity ? (
+              <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
+                <div className="flex items-center justify-between gap-4">
+                  <h2 className="text-xl font-bold">Reviews</h2>
+
+                  <Link
+                    href={`/business/${slug}/review`}
+                    className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                  >
+                    Leave a review
+                  </Link>
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  {reviews.length ? (
+                    reviews.map((review) => (
+                      <div
+                        key={review.id}
+                        className="rounded-xl border border-stone-200 p-4"
+                      >
+                        <p className="font-semibold">{review.reviewer_name}</p>
+                        <p className="mt-1 text-sm text-amber-600">
+                          {'⭐'.repeat(review.rating)}
+                        </p>
+                        <p className="mt-3 text-stone-700">
+                          {review.review_text}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-stone-600">
+                      No approved reviews yet. Be the first to leave one.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-red-50 p-6 shadow-sm ring-1 ring-red-100">
+                <h2 className="text-xl font-bold text-red-950">
+                  Reviews disabled
+                </h2>
+                <p className="mt-3 text-sm leading-6 text-red-900">
+                  This listing is included as useful local information rather
+                  than as a business listing, so reviews are not collected here.
+                </p>
+              </div>
             )}
-
-            <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl font-bold">Reviews</h2>
-
-                <Link
-                  href={`/business/${slug}/review`}
-                  className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
-                >
-                  Leave a review
-                </Link>
-              </div>
-
-              <div className="mt-5 space-y-4">
-                {reviews.length ? (
-                  reviews.map((review) => (
-                    <div
-                      key={review.id}
-                      className="rounded-xl border border-stone-200 p-4"
-                    >
-                      <p className="font-semibold">{review.reviewer_name}</p>
-                      <p className="mt-1 text-sm text-amber-600">
-                        {'⭐'.repeat(review.rating)}
-                      </p>
-                      <p className="mt-3 text-stone-700">
-                        {review.review_text}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-stone-600">
-                    No approved reviews yet. Be the first to leave one.
-                  </p>
-                )}
-              </div>
-            </div>
           </div>
 
           <aside className="space-y-6">
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-              <h2 className="text-xl font-bold">Contact</h2>
+              <h2 className="text-xl font-bold">
+                {isCommunity ? 'Contact details' : 'Contact'}
+              </h2>
 
               <div className="mt-4 space-y-3 text-sm text-stone-700">
-                {business.phone && (
+                {business.phone ? (
                   <p>
                     📞{' '}
-                    <BusinessStatTracker
-                      businessId={business.id}
-                      eventType="phone_click"
-                      href={`tel:${cleanPhoneNumber(business.phone)}`}
-                      className="underline"
-                    >
-                      {business.phone}
-                    </BusinessStatTracker>
+                    {!isCommunity ? (
+                      <BusinessStatTracker
+                        businessId={business.id}
+                        eventType="phone_click"
+                        href={`tel:${cleanPhoneNumber(business.phone)}`}
+                        className="underline"
+                      >
+                        {business.phone}
+                      </BusinessStatTracker>
+                    ) : (
+                      <a
+                        href={`tel:${cleanPhoneNumber(business.phone)}`}
+                        className="underline"
+                      >
+                        {business.phone}
+                      </a>
+                    )}
                   </p>
-                )}
+                ) : null}
 
-                {business.email && (
+                {business.email ? (
                   <p>
                     ✉️{' '}
-                    <BusinessStatTracker
-                      businessId={business.id}
-                      eventType="email_click"
-                      href={`mailto:${business.email}`}
-                      className="underline"
-                    >
-                      {business.email}
-                    </BusinessStatTracker>
+                    {!isCommunity ? (
+                      <BusinessStatTracker
+                        businessId={business.id}
+                        eventType="email_click"
+                        href={`mailto:${business.email}`}
+                        className="underline"
+                      >
+                        {business.email}
+                      </BusinessStatTracker>
+                    ) : (
+                      <a href={`mailto:${business.email}`} className="underline">
+                        {business.email}
+                      </a>
+                    )}
                   </p>
-                )}
+                ) : null}
 
-                {business.website && (
+                {business.website ? (
                   <p>
                     🌐{' '}
-                    <BusinessStatTracker
-                      businessId={business.id}
-                      eventType="website_click"
-                      href={cleanWebsiteUrl(business.website)}
-                      className="break-all underline"
-                      target="_blank"
-                    >
-                      {displayWebsiteUrl(business.website)}
-                    </BusinessStatTracker>
+                    {!isCommunity ? (
+                      <BusinessStatTracker
+                        businessId={business.id}
+                        eventType="website_click"
+                        href={cleanWebsiteUrl(business.website)}
+                        className="break-all underline"
+                        target="_blank"
+                      >
+                        {displayWebsiteUrl(business.website)}
+                      </BusinessStatTracker>
+                    ) : (
+                      <a
+                        href={cleanWebsiteUrl(business.website)}
+                        className="break-all underline"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {displayWebsiteUrl(business.website)}
+                      </a>
+                    )}
                   </p>
-                )}
+                ) : null}
 
-                {business.facebook && (
+                {business.facebook && !isCommunity ? (
                   <p>
                     Facebook:{' '}
                     <BusinessStatTracker
@@ -277,9 +375,9 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                       View page
                     </BusinessStatTracker>
                   </p>
-                )}
+                ) : null}
 
-                {business.instagram && (
+                {business.instagram && !isCommunity ? (
                   <p>
                     Instagram:{' '}
                     <BusinessStatTracker
@@ -292,39 +390,56 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                       View profile
                     </BusinessStatTracker>
                   </p>
-                )}
+                ) : null}
+
+                {!business.phone &&
+                !business.email &&
+                !business.website &&
+                !business.facebook &&
+                !business.instagram ? (
+                  <p>No contact details added yet.</p>
+                ) : null}
               </div>
             </div>
 
-            {business.opening_times && (
+            {business.opening_times ? (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-                <h2 className="text-xl font-bold">Opening times</h2>
+                <h2 className="text-xl font-bold">
+                  {isCommunity ? 'Opening times / availability' : 'Opening times'}
+                </h2>
+
                 <p className="mt-4 whitespace-pre-line text-sm text-stone-700">
                   {business.opening_times}
                 </p>
               </div>
-            )}
+            ) : null}
 
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-              <h2 className="text-xl font-bold">Address</h2>
+              <h2 className="text-xl font-bold">
+                {isCommunity ? 'Location' : 'Address'}
+              </h2>
 
               <div className="mt-4 text-sm text-stone-700">
-                {business.address_line_1 && <p>{business.address_line_1}</p>}
-                {business.address_line_2 && <p>{business.address_line_2}</p>}
-                {business.town && <p>{business.town}</p>}
-                {business.postcode && <p>{business.postcode}</p>}
+                {business.address_line_1 ? <p>{business.address_line_1}</p> : null}
+                {business.address_line_2 ? <p>{business.address_line_2}</p> : null}
+                {business.town ? <p>{business.town}</p> : null}
+                {business.postcode ? <p>{business.postcode}</p> : null}
 
                 {!business.address_line_1 &&
-                  !business.address_line_2 &&
-                  !business.town &&
-                  !business.postcode && <p>No address added yet.</p>}
+                !business.address_line_2 &&
+                !business.town &&
+                !business.postcode ? (
+                  <p>No address added yet.</p>
+                ) : null}
 
-                {business.service_area && (
+                {business.service_area ? (
                   <p className="mt-4">
-                    <span className="font-semibold">Service area:</span>{' '}
+                    <span className="font-semibold">
+                      {isCommunity ? 'Area covered:' : 'Service area:'}
+                    </span>{' '}
                     {business.service_area}
                   </p>
-                )}
+                ) : null}
 
                 <div className="mt-8 border-t pt-4">
                   <Link
@@ -336,6 +451,23 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 </div>
               </div>
             </div>
+
+            {isCommunity ? (
+              <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
+                <h2 className="text-xl font-bold">Suggest an update</h2>
+                <p className="mt-3 text-sm leading-6 text-stone-700">
+                  Is this local information missing something or out of date?
+                  Let us know so it can be reviewed.
+                </p>
+
+                <Link
+                  href={`/contact?subject=Report Listing&business=${business.slug}`}
+                  className="mt-5 inline-flex rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                >
+                  Suggest an update
+                </Link>
+              </div>
+            ) : null}
           </aside>
         </div>
       </section>
