@@ -329,7 +329,68 @@ const filteredListings = useMemo(() => {
             </button>
           </div>
         </section>
+<section className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
+  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+        Local amenities
+      </p>
 
+      <h2 className="mt-1 text-lg font-bold text-stone-950">
+        Schools, places of worship and useful local information
+      </h2>
+
+      <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
+        Quickly find local amenities such as schools, places of worship,
+        council services, recycling centres and community information.
+      </p>
+    </div>
+
+    <Link
+      href="/contact?topic=local-info"
+      className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+    >
+      Suggest local info
+    </Link>
+  </div>
+
+  <div className="mt-4 flex flex-wrap gap-2">
+    <Link
+      href="/directory?q=school"
+      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+    >
+      Schools
+    </Link>
+
+    <Link
+      href="/directory?q=place%20of%20worship"
+      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+    >
+      Places of worship
+    </Link>
+
+    <Link
+      href="/directory?q=council"
+      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+    >
+      Council services
+    </Link>
+
+    <Link
+      href="/directory?q=recycling"
+      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+    >
+      Recycling centres
+    </Link>
+
+    <Link
+      href="/directory?q=mp"
+      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+    >
+      MP / councillors
+    </Link>
+  </div>
+</section>
         {error ? (
           <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-200">
             {error}

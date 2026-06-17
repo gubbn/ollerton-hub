@@ -1,256 +1,368 @@
 'use client'
 
-import { Suspense } from 'react'
+import { FormEvent, Suspense, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
 
-const contactEmail = 'hello@ollertonhub.co.uk'
+type ContactTopic =
+  | 'general'
+  | 'subscriptions'
+  | 'advert-enquiry'
+  | 'report-listing'
+  | 'featured-listing'
+  | 'premium-listing'
+  | 'local-info'
+  | 'technical'
 
-function getReadableBusinessName(slug: string) {
-  return slug
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+type TopicOption = {
+  value: ContactTopic
+  label: string
+  title: string
+  intro: string
+  messagePlaceholder: string
+}
+
+const topicOptions: TopicOption[] = [
+  {
+    value: 'general',
+    label: 'General enquiry',
+    title: 'Contact Ollerton Hub',
+    intro:
+      'Send us a message about Ollerton Hub, local listings, corrections or general enquiries.',
+    messagePlaceholder: 'How can we help?',
+  },
+  {
+    value: 'subscriptions',
+    label: 'Subscriptions',
+    title: 'Subscriptions enquiry',
+    intro:
+      'Ask about listing options, upgrades, featured placements or ongoing subscription details.',
+    messagePlaceholder:
+      'Tell us what you would like to know about subscriptions or listing options.',
+  },
+  {
+    value: 'advert-enquiry',
+    label: 'Advert enquiry',
+    title: 'Advert enquiry',
+    intro:
+      'Ask about local advert space, homepage placements, sponsor messages or promotional options.',
+    messagePlaceholder:
+      'Tell us what you would like to promote and roughly when you would like it to appear.',
+  },
+  {
+    value: 'report-listing',
+    label: 'Report a listing',
+    title: 'Report a listing',
+    intro:
+      'Use this form to report incorrect details, unsuitable content or a concern about a listing.',
+    messagePlaceholder:
+      'Please explain what is wrong with the listing and what you think needs checking.',
+  },
+  {
+    value: 'featured-listing',
+    label: 'Featured listing',
+    title: 'Featured listing enquiry',
+    intro:
+      'Ask about making your listing stand out in the directory and on Ollerton Hub pages.',
+    messagePlaceholder:
+      'Tell us which listing you would like to feature and what you would like to achieve.',
+  },
+  {
+    value: 'premium-listing',
+    label: 'Premium listing',
+    title: 'Premium listing enquiry',
+    intro:
+      'Ask about Premium listing features, stats, visibility and promotional options.',
+    messagePlaceholder:
+      'Tell us about your business and what you would like from a Premium listing.',
+  },
+  {
+    value: 'local-info',
+    label: 'Submit local information',
+    title: 'Submit useful local information',
+    intro:
+      'Suggest a school, place of worship, council service, community group or other useful local information.',
+    messagePlaceholder:
+      'Tell us what should be added or updated, including any useful contact details or links.',
+  },
+  {
+    value: 'technical',
+    label: 'Technical issue',
+    title: 'Report a technical issue',
+    intro:
+      'Let us know if something on Ollerton Hub is not working as expected.',
+    messagePlaceholder:
+      'Please explain what happened, what page you were on, and what device/browser you were using if known.',
+  },
+]
+
+function getTopicOption(value: string | null): TopicOption {
+  const match = topicOptions.find((option) => option.value === value)
+  return match || topicOptions[0]
+}
+
+function cleanValue(value: string) {
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
 }
 
 function ContactContent() {
   const searchParams = useSearchParams()
 
-  const subjectParam = searchParams.get('subject') ?? ''
-  const businessParam = searchParams.get('business') ?? ''
+  const initialTopic = getTopicOption(searchParams.get('topic'))
+  const listingSlug = searchParams.get('listing') || ''
+  const listingName = searchParams.get('listingName') || ''
 
-  const isAmenityRequest = subjectParam === 'request-local-amenity'
-  const isReportListing =
-    subjectParam.toLowerCase() === 'report listing' && Boolean(businessParam)
-  const isAdvertising = subjectParam === 'advertising'
-  const isFeatured = subjectParam === 'featured'
-  const isPremium = subjectParam === 'premium'
+  const [topic, setTopic] = useState<ContactTopic>(initialTopic.value)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [businessName, setBusinessName] = useState(listingName)
+  const [message, setMessage] = useState('')
+  const [company, setCompany] = useState('')
 
-  const readableBusinessName = businessParam
-    ? getReadableBusinessName(businessParam)
-    : ''
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
 
-  const pageLabel = isAmenityRequest
-    ? 'Local amenity request'
-    : isReportListing
-      ? 'Report listing'
-      : isAdvertising
-        ? 'Advertising enquiry'
-        : isFeatured
-          ? 'Featured listing enquiry'
-          : isPremium
-            ? 'Premium listing enquiry'
-            : 'Contact'
+  const selectedTopic = useMemo(() => getTopicOption(topic), [topic])
 
-  const pageTitle = isAmenityRequest
-    ? 'Request a local amenity'
-    : isReportListing
-      ? 'Report a listing'
-      : isAdvertising
-        ? 'Ask about advertising'
-        : isFeatured
-          ? 'Ask about Featured listings'
-          : isPremium
-            ? 'Ask about Premium listings'
-            : 'Get in touch with Ollerton Hub'
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
 
-  const introText = isAmenityRequest
-    ? 'Tell us about a useful local place, service or public amenity that should be added to Ollerton Hub.'
-    : isReportListing
-      ? 'Tell us what needs checking or correcting on this listing.'
-      : isAdvertising
-        ? 'Ask about placing a local advert on Ollerton Hub.'
-        : isFeatured
-          ? 'Ask about giving your business extra visibility with a Featured listing.'
-          : isPremium
-            ? 'Ask about Premium listings, including extra visibility and listing performance metrics.'
-            : 'Need to report a listing, request a correction, ask about paid options or suggest something useful for the directory?'
+    setError('')
+    setSuccess(false)
 
-  const emailSubject = isAmenityRequest
-    ? 'Request local amenity'
-    : isReportListing
-      ? `Report Listing: ${readableBusinessName || businessParam}`
-      : isAdvertising
-        ? 'Advertising enquiry'
-        : isFeatured
-          ? 'Featured listing enquiry'
-          : isPremium
-            ? 'Premium listing enquiry'
-            : subjectParam || 'Ollerton Hub enquiry'
+    if (company.trim()) {
+      setSuccess(true)
+      return
+    }
 
-  const emailBody = isAmenityRequest
-    ? `Hi Ollerton Hub,
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setError('Please add your name, email address and message.')
+      return
+    }
 
-I would like to suggest a local amenity to be added to the directory.
+    setSubmitting(true)
 
-Amenity name:
+    const { error: insertError } = await supabase
+      .from('contact_messages')
+      .insert({
+        topic,
+        title: selectedTopic.title,
+        name: name.trim(),
+        email: email.trim(),
+        phone: cleanValue(phone),
+        business_name: cleanValue(businessName),
+        listing_slug: cleanValue(listingSlug),
+        listing_name: cleanValue(listingName),
+        message: message.trim(),
+        status: 'new',
+      })
 
-Amenity type:
-For example: school, place of worship, recycling centre, council service, community venue, public service.
+    setSubmitting(false)
 
-Address or area:
+    if (insertError) {
+      setError(insertError.message)
+      return
+    }
 
-Website, phone number or email if known:
-
-Why this would be useful for local residents:
-
-Additional details:
-`
-    : isReportListing
-      ? `Hi Ollerton Hub,
-
-I would like to report the following listing:
-
-${readableBusinessName || businessParam}
-${businessParam ? `Listing slug: ${businessParam}` : ''}
-
-Reason:
-
-Details:
-`
-      : isAdvertising
-        ? `Hi Ollerton Hub,
-
-I would like to ask about advertising on Ollerton Hub.
-
-Business / organisation name:
-
-Website or social link:
-
-What would you like to advertise?
-
-Preferred advert dates, if known:
-
-Additional details:
-`
-        : isFeatured
-          ? `Hi Ollerton Hub,
-
-I would like to ask about a Featured listing.
-
-Business name:
-
-Current listing link, if already listed:
-
-Additional details:
-`
-          : isPremium
-            ? `Hi Ollerton Hub,
-
-I would like to ask about a Premium listing.
-
-Business name:
-
-Current listing link, if already listed:
-
-Additional details:
-`
-            : `Hi Ollerton Hub,
-
-`
-
-  const mailtoLink = `mailto:${contactEmail}?subject=${encodeURIComponent(
-    emailSubject
-  )}&body=${encodeURIComponent(emailBody)}`
+    setSuccess(true)
+    setName('')
+    setEmail('')
+    setPhone('')
+    setBusinessName(listingName)
+    setMessage('')
+  }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
-      <div className="mx-auto max-w-5xl">
-        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200 md:p-10">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-red-600">
-            {pageLabel}
-          </p>
+    <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900">
+      <section className="mx-auto max-w-4xl">
+        <Link href="/" className="text-sm font-medium text-stone-600 hover:underline">
+          ← Back to Ollerton Hub
+        </Link>
 
-          <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-stone-900">
-            {pageTitle}
-          </h1>
-
-          <p className="mb-8 max-w-2xl text-base leading-relaxed text-stone-700">
-            {introText}
-          </p>
-
-          {isAmenityRequest ? (
-            <div className="mb-6 rounded-2xl bg-red-50 p-5 text-sm text-red-900 ring-1 ring-red-100">
-              <p className="font-bold">Helpful details to include:</p>
-
-              <ul className="mt-3 space-y-2">
-                <li>• Name of the place or service</li>
-                <li>
-                  • Type, such as school, place of worship, recycling centre or
-                  community venue
-                </li>
-                <li>• Address, town or service area</li>
-                <li>• Website, phone number or email if known</li>
-                <li>• Why it should be added to Ollerton Hub</li>
-              </ul>
-            </div>
-          ) : null}
-
-          {isReportListing ? (
-            <div className="mb-6 rounded-2xl bg-amber-50 p-5 text-sm text-amber-900 ring-1 ring-amber-100">
-              <p className="font-bold">Listing to review:</p>
-              <p className="mt-2">{readableBusinessName || businessParam}</p>
-              {businessParam ? (
-                <p className="mt-1 text-amber-800">Slug: {businessParam}</p>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="rounded-2xl bg-stone-50 p-5 ring-1 ring-stone-200">
-            <h2 className="mb-2 text-xl font-bold text-stone-900">
-              Email us
-            </h2>
-
-            <p className="mb-5 text-sm leading-relaxed text-stone-600">
-              This keeps things simple and avoids storing your message on the
-              website. The email button will open your email app with the right
-              subject and guidance already filled in.
+        <section className="mt-5 overflow-hidden rounded-3xl bg-stone-900 text-white shadow-sm">
+          <div className="p-6 md:p-8">
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-300">
+              Contact us
             </p>
 
-            <a
-              href={mailtoLink}
-              className="inline-flex rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
-            >
-              {isAmenityRequest
-                ? 'Email amenity request'
-                : isReportListing
-                  ? 'Email listing report'
-                  : isAdvertising
-                    ? 'Email advertising enquiry'
-                    : isFeatured
-                      ? 'Email Featured enquiry'
-                      : isPremium
-                        ? 'Email Premium enquiry'
-                        : 'Email Ollerton Hub'}
-            </a>
+            <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
+              {selectedTopic.title}
+            </h1>
 
-            <p className="mt-5 text-sm text-stone-600">
-              Or email us directly at{' '}
-              <a
-                href={`mailto:${contactEmail}`}
-                className="font-semibold text-red-600 hover:underline"
-              >
-                {contactEmail}
-              </a>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-200">
+              {selectedTopic.intro}
             </p>
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link
-              href="/directory"
-              className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 hover:bg-stone-50"
-            >
-              View directory
-            </Link>
-
-            <Link
-              href="/about"
-              className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 hover:bg-stone-50"
-            >
-              About listings
-            </Link>
           </div>
         </section>
-      </div>
+
+        <section className="mt-6 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-200 md:p-6">
+          {success ? (
+            <div className="rounded-2xl bg-green-50 p-5 ring-1 ring-green-200">
+              <h2 className="text-lg font-bold text-green-900">
+                Message sent
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-green-800">
+                Thanks for contacting Ollerton Hub. Your message has been received.
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSuccess(false)}
+                  className="rounded-xl bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
+                >
+                  Send another message
+                </button>
+
+                <Link
+                  href="/directory"
+                  className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-800"
+                >
+                  Back to directory
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="text-sm font-semibold text-stone-900">
+                  What is this about?
+                </label>
+
+                <select
+                  value={topic}
+                  onChange={(event) => setTopic(event.target.value as ContactTopic)}
+                  className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                >
+                  {topicOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm font-semibold text-stone-900">
+                    Your name *
+                  </label>
+
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                    placeholder="Your name"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-stone-900">
+                    Email address *
+                  </label>
+
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                    placeholder="you@example.com"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm font-semibold text-stone-900">
+                    Phone number
+                  </label>
+
+                  <input
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                    placeholder="Optional"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-stone-900">
+                    Business / listing name
+                  </label>
+
+                  <input
+                    value={businessName}
+                    onChange={(event) => setBusinessName(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+
+              {listingSlug ? (
+                <div className="rounded-2xl bg-stone-50 p-4 ring-1 ring-stone-200">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                    Linked listing
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold text-stone-900">
+                    {listingName || listingSlug}
+                  </p>
+
+                  <p className="mt-1 text-xs text-stone-500">
+                    /business/{listingSlug}
+                  </p>
+                </div>
+              ) : null}
+
+              <div>
+                <label className="text-sm font-semibold text-stone-900">
+                  Message *
+                </label>
+
+                <textarea
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  rows={7}
+                  className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                  placeholder={selectedTopic.messagePlaceholder}
+                />
+              </div>
+
+              <div className="hidden">
+                <label>
+                  Company
+                  <input
+                    value={company}
+                    onChange={(event) => setCompany(event.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                  />
+                </label>
+              </div>
+
+              {error ? (
+                <p className="rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-200">
+                  {error}
+                </p>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
+              >
+                {submitting ? 'Sending...' : 'Send message'}
+              </button>
+            </form>
+          )}
+        </section>
+      </section>
     </main>
   )
 }
@@ -259,10 +371,10 @@ export default function ContactPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
-          <div className="mx-auto max-w-5xl rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-            Loading contact page...
-          </div>
+        <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900">
+          <section className="mx-auto max-w-4xl">
+            <p>Loading contact form...</p>
+          </section>
         </main>
       }
     >

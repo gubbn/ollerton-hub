@@ -365,6 +365,12 @@ export default function DashboardPage() {
 
         <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           <DashboardCard
+  title="Suggest local amenities"
+  description="Tell us about a school, place of worship, recycling centre, council service, community group or other useful local information."
+  href="/contact?topic=local-info"
+  buttonText="Submit local info"
+/>
+          <DashboardCard
             title={
               business ? 'Edit business listing' : 'Create business listing'
             }
@@ -441,7 +447,7 @@ function LockedMetrics({ isFeatured }: { isFeatured: boolean }) {
         </div>
 
         <Link
-          href="/contact"
+          href="/contact?topic=premium-listing"
           className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
         >
           Ask about Premium

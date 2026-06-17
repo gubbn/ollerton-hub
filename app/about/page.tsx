@@ -41,7 +41,7 @@ export default function AboutPage() {
             </Link>
 
             <Link
-              href="/contact"
+              href="/contact?topic=subscriptions"
               className="rounded-xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white hover:bg-stone-800"
             >
               Ask about paid options
@@ -96,7 +96,7 @@ export default function AboutPage() {
               'Useful for seasonal offers or new businesses',
             ]}
             bestFor="Best for businesses that want extra attention without a full promotion package."
-            href="/contact"
+            href="/contact?topic=featured-listing"
             buttonText="Ask about Featured"
           />
 
@@ -118,7 +118,7 @@ export default function AboutPage() {
               'Suitable for ongoing local promotion',
             ]}
             bestFor="Best for businesses that rely on local visibility and want to be seen first."
-            href="/contact"
+            href="/contact?topic=premium-listing"
             buttonText="Ask about Premium"
           />
         </section>
@@ -216,7 +216,7 @@ export default function AboutPage() {
 
             <div className="mt-5">
               <Link
-                href="/contact"
+               href="/contact?topic=advert-enquiry"
                 className="inline-flex rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
               >
                 Ask about advertising
@@ -252,7 +252,7 @@ export default function AboutPage() {
             </Link>
 
             <Link
-              href="/contact?subject=request-local-amenity"
+              href="/contact?topic=local-info"
               className="rounded-xl border border-white/30 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10"
             >
               Request local amenity

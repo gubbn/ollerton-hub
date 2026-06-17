@@ -188,7 +188,7 @@ export default async function HomePage() {
       </p>
 
       <Link
-        href="/contact"
+        href="/contact?topic=advert-enquiry"
         className="mt-4 inline-flex rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
       >
         Ask about this space
@@ -198,7 +198,69 @@ export default async function HomePage() {
 </aside>
           </div>
         </section>
+<section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
+  <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+        Local amenities
+      </p>
 
+      <h2 className="mt-1 text-2xl font-bold text-stone-950">
+        Schools, places of worship and useful local information
+      </h2>
+
+      <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
+        Find useful local information around Ollerton, including schools,
+        places of worship, council services, recycling centres and community
+        contacts.
+      </p>
+    </div>
+
+    <Link
+      href="/contact?topic=local-info"
+      className="inline-flex justify-center rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
+    >
+      Suggest local info
+    </Link>
+  </div>
+
+  <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+    <Link
+      href="/directory?q=school"
+      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
+    >
+      Schools
+    </Link>
+
+    <Link
+      href="/directory?q=place%20of%20worship"
+      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
+    >
+      Places of worship
+    </Link>
+
+    <Link
+      href="/directory?q=council"
+      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
+    >
+      Council services
+    </Link>
+
+    <Link
+      href="/directory?q=recycling"
+      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
+    >
+      Recycling centres
+    </Link>
+
+    <Link
+      href="/directory?q=mp"
+      className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
+    >
+      MP / councillors
+    </Link>
+  </div>
+</section>
         <section>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
