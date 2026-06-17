@@ -9,9 +9,14 @@ type Business = {
   id: string
   business_name: string
   slug: string
-  is_approved: boolean
-  is_featured: boolean
-  is_premium: boolean
+  status: string | null
+  is_approved: boolean | null
+  is_featured: boolean | null
+  is_premium: boolean | null
+  has_pending_changes: boolean | null
+  pending_changed_fields: string[] | null
+  changes_submitted_at: string | null
+  change_rejection_reason: string | null
 }
 
 type BusinessStat = {
@@ -36,6 +41,37 @@ const emptyStats: Stats = {
   instagram_click: 0,
 }
 
+function formatDate(value: string | null) {
+  if (!value) return null
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value))
+}
+
+function getApprovalLabel(business: Business) {
+  if (business.status === 'rejected') return 'Rejected listing'
+  if (business.status === 'approved' || business.is_approved === true) {
+    return 'Approved listing'
+  }
+
+  return 'Awaiting approval'
+}
+
+function getApprovalBadgeClasses(business: Business) {
+  if (business.status === 'rejected') {
+    return 'bg-red-100 text-red-800'
+  }
+
+  if (business.status === 'approved' || business.is_approved === true) {
+    return 'bg-green-100 text-green-800'
+  }
+
+  return 'bg-amber-100 text-amber-800'
+}
+
 export default function DashboardPage() {
   const router = useRouter()
 
@@ -43,13 +79,16 @@ export default function DashboardPage() {
   const [business, setBusiness] = useState<Business | null>(null)
   const [stats, setStats] = useState<Stats>(emptyStats)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     loadDashboard()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function loadDashboard() {
     setLoading(true)
+    setError('')
 
     const {
       data: { user },
@@ -60,7 +99,7 @@ export default function DashboardPage() {
       return
     }
 
-    const [{ data: profileData }, { data: businessData }] = await Promise.all([
+    const [profileResult, businessResult] = await Promise.all([
       supabase
         .from('profiles')
         .select('is_admin')
@@ -70,17 +109,41 @@ export default function DashboardPage() {
       supabase
         .from('businesses')
         .select(
-          'id, business_name, slug, is_approved, is_featured, is_premium'
+          `
+          id,
+          business_name,
+          slug,
+          status,
+          is_approved,
+          is_featured,
+          is_premium,
+          has_pending_changes,
+          pending_changed_fields,
+          changes_submitted_at,
+          change_rejection_reason
+        `
         )
         .eq('owner_id', user.id)
         .neq('listing_type', 'community')
         .maybeSingle(),
     ])
 
-    setIsAdmin(profileData?.is_admin === true)
+    if (profileResult.error) {
+      setError(profileResult.error.message)
+      setLoading(false)
+      return
+    }
 
-    if (businessData) {
-      const loadedBusiness = businessData as Business
+    if (businessResult.error) {
+      setError(businessResult.error.message)
+      setLoading(false)
+      return
+    }
+
+    setIsAdmin(profileResult.data?.is_admin === true)
+
+    if (businessResult.data) {
+      const loadedBusiness = businessResult.data as Business
       setBusiness(loadedBusiness)
 
       // Keep loading stats for all businesses.
@@ -157,15 +220,19 @@ export default function DashboardPage() {
 
           {business ? (
             <div className="mt-6 flex flex-wrap gap-3">
-              {business.is_approved ? (
-                <span className="rounded-xl bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
-                  Approved listing
+              <span
+                className={`rounded-xl px-4 py-2 text-sm font-semibold ${getApprovalBadgeClasses(
+                  business
+                )}`}
+              >
+                {getApprovalLabel(business)}
+              </span>
+
+              {business.has_pending_changes ? (
+                <span className="rounded-xl bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-800">
+                  Changes awaiting review
                 </span>
-              ) : (
-                <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
-                  Awaiting approval
-                </span>
-              )}
+              ) : null}
 
               {business.is_featured ? (
                 <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
@@ -181,6 +248,75 @@ export default function DashboardPage() {
             </div>
           ) : null}
         </section>
+
+        {error ? (
+          <section className="rounded-2xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-200">
+            {error}
+          </section>
+        ) : null}
+
+        {business?.has_pending_changes ? (
+          <section className="rounded-2xl bg-blue-50 p-5 shadow-sm ring-1 ring-blue-200">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  Changes awaiting review
+                </p>
+
+                <h2 className="mt-1 text-lg font-bold text-blue-950">
+                  Your current approved listing is still live
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-blue-900">
+                  Some of your recent edits need to be reviewed before they
+                  appear publicly. Your existing approved listing will stay live
+                  while those changes are checked.
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-blue-900">
+                  {business.pending_changed_fields?.length ? (
+                    <span className="rounded-full bg-white px-3 py-1 ring-1 ring-blue-200">
+                      {business.pending_changed_fields.length} field
+                      {business.pending_changed_fields.length === 1
+                        ? ''
+                        : 's'}{' '}
+                      awaiting review
+                    </span>
+                  ) : null}
+
+                  {business.changes_submitted_at ? (
+                    <span className="rounded-full bg-white px-3 py-1 ring-1 ring-blue-200">
+                      Submitted {formatDate(business.changes_submitted_at)}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <Link
+                href="/dashboard/business"
+                className="inline-flex justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+              >
+                View edits
+              </Link>
+            </div>
+          </section>
+        ) : null}
+
+        {business?.change_rejection_reason ? (
+          <section className="rounded-2xl bg-amber-50 p-5 shadow-sm ring-1 ring-amber-200">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+              Previous change note
+            </p>
+
+            <h2 className="mt-1 text-lg font-bold text-amber-950">
+              Admin note about your last submitted changes
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-amber-900">
+              {business.change_rejection_reason}
+            </p>
+          </section>
+        ) : null}
 
         {business ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
@@ -222,7 +358,7 @@ export default function DashboardPage() {
                 </p>
               </>
             ) : (
-              <LockedMetrics isFeatured={business.is_featured} />
+              <LockedMetrics isFeatured={business.is_featured === true} />
             )}
           </section>
         ) : null}
@@ -234,7 +370,9 @@ export default function DashboardPage() {
             }
             description={
               business
-                ? 'Update your business details, logo, opening times and contact information.'
+                ? business.has_pending_changes
+                  ? 'Review your submitted edits, update safe contact details, or make further changes to your listing.'
+                  : 'Update your business details, logo, opening times and contact information.'
                 : 'Add your business to Ollerton Hub so local people can find you.'
             }
             href="/dashboard/business"
@@ -356,9 +494,7 @@ function DashboardCard({
   return (
     <div
       className={`rounded-3xl p-6 shadow-sm ring-1 ${
-        admin
-          ? 'bg-red-50 ring-red-200'
-          : 'bg-white ring-stone-200'
+        admin ? 'bg-red-50 ring-red-200' : 'bg-white ring-stone-200'
       }`}
     >
       <h2 className="text-xl font-bold text-stone-900">{title}</h2>
@@ -368,9 +504,7 @@ function DashboardCard({
       <Link
         href={href}
         className={`mt-5 inline-block rounded-xl px-4 py-2 text-sm font-semibold text-white ${
-          admin
-            ? 'bg-stone-900 hover:bg-stone-800'
-            : 'bg-red-700 hover:bg-red-800'
+          admin ? 'bg-stone-900 hover:bg-stone-800' : 'bg-red-700 hover:bg-red-800'
         }`}
       >
         {buttonText}

@@ -10,6 +10,10 @@ type Category = {
   name: string
 }
 
+type PendingChangeValue = string | boolean | null
+
+type PendingChanges = Record<string, PendingChangeValue>
+
 type Business = {
   id: string
   business_name: string
@@ -31,12 +35,20 @@ type Business = {
   service_area: string | null
   opening_times: string | null
   logo_url: string | null
-  is_approved: boolean
-  is_featured: boolean
-  is_premium: boolean
+  is_approved: boolean | null
+  is_featured: boolean | null
+  is_premium: boolean | null
   use_external_reviews: boolean | null
   external_review_platform: string | null
   external_review_url: string | null
+  pending_changes: PendingChanges | null
+  pending_changed_fields: string[] | null
+  has_pending_changes: boolean | null
+  changes_submitted_at: string | null
+  changes_submitted_by: string | null
+  changes_reviewed_at: string | null
+  changes_reviewed_by: string | null
+  change_rejection_reason: string | null
 }
 
 type FormState = {
@@ -64,6 +76,83 @@ type FormState = {
 }
 
 type ListingTier = 'free' | 'featured' | 'premium'
+
+const BUSINESS_SELECT = `
+  id,
+  business_name,
+  slug,
+  category_id,
+  listing_type,
+  status,
+  description,
+  services,
+  phone,
+  email,
+  website,
+  facebook,
+  instagram,
+  address_line_1,
+  address_line_2,
+  town,
+  postcode,
+  service_area,
+  opening_times,
+  logo_url,
+  is_approved,
+  is_featured,
+  is_premium,
+  use_external_reviews,
+  external_review_platform,
+  external_review_url,
+  pending_changes,
+  pending_changed_fields,
+  has_pending_changes,
+  changes_submitted_at,
+  changes_submitted_by,
+  changes_reviewed_at,
+  changes_reviewed_by,
+  change_rejection_reason
+`
+
+const DIRECT_UPDATE_FIELDS = [
+  'phone',
+  'email',
+  'website',
+  'facebook',
+  'instagram',
+  'address_line_1',
+  'address_line_2',
+  'town',
+  'postcode',
+  'service_area',
+  'opening_times',
+] as const satisfies readonly (keyof FormState)[]
+
+const REVIEW_FIELDS = [
+  'business_name',
+  'category_id',
+  'description',
+  'services',
+  'logo_url',
+  'use_external_reviews',
+  'external_review_platform',
+  'external_review_url',
+] as const satisfies readonly (keyof FormState)[]
+
+type DirectUpdateField = (typeof DIRECT_UPDATE_FIELDS)[number]
+type ReviewField = (typeof REVIEW_FIELDS)[number]
+
+const FIELD_LABELS: Record<string, string> = {
+  business_name: 'Business name',
+  slug: 'Business URL',
+  category_id: 'Category',
+  description: 'Description',
+  services: 'Services',
+  logo_url: 'Logo',
+  use_external_reviews: 'Review settings',
+  external_review_platform: 'External review platform',
+  external_review_url: 'External review link',
+}
 
 const WORD_LIMITS: Record<
   ListingTier,
@@ -131,6 +220,30 @@ function normaliseUrl(value: string) {
   return `https://${trimmedValue}`
 }
 
+function cleanStringValue(value: string | null | undefined) {
+  const trimmedValue = (value ?? '').trim()
+  return trimmedValue.length > 0 ? trimmedValue : null
+}
+
+function cleanUrlValue(value: string | null | undefined) {
+  return normaliseUrl(value ?? '') || null
+}
+
+function comparableValue(value: unknown) {
+  if (value === undefined || value === null || value === '') return null
+
+  if (typeof value === 'string') {
+    const trimmedValue = value.trim()
+    return trimmedValue.length > 0 ? trimmedValue : null
+  }
+
+  return value
+}
+
+function valuesMatch(a: unknown, b: unknown) {
+  return comparableValue(a) === comparableValue(b)
+}
+
 function countWords(value: string | null | undefined) {
   if (!value) return 0
 
@@ -154,6 +267,112 @@ function getTierLabel(tier: ListingTier) {
   return 'Free'
 }
 
+function getPendingChanges(business: Business | null): PendingChanges {
+  if (!business?.pending_changes) return {}
+  if (Array.isArray(business.pending_changes)) return {}
+
+  return business.pending_changes
+}
+
+function hasPendingValue(business: Business, field: string) {
+  return Object.prototype.hasOwnProperty.call(getPendingChanges(business), field)
+}
+
+function getPendingValue(business: Business, field: string) {
+  return getPendingChanges(business)[field]
+}
+
+function getEditableTextValue(business: Business, field: keyof FormState) {
+  if (hasPendingValue(business, field)) {
+    const pendingValue = getPendingValue(business, field)
+    return typeof pendingValue === 'string' ? pendingValue : ''
+  }
+
+  const liveValue = business[field as keyof Business]
+  return typeof liveValue === 'string' ? liveValue : ''
+}
+
+function getEditableBooleanValue(
+  business: Business,
+  field: 'use_external_reviews'
+) {
+  if (hasPendingValue(business, field)) {
+    return getPendingValue(business, field) === true
+  }
+
+  return business[field] === true
+}
+
+function getPreparedDirectFieldValue(field: DirectUpdateField, form: FormState) {
+  if (field === 'website' || field === 'facebook' || field === 'instagram') {
+    return cleanUrlValue(form[field])
+  }
+
+  return cleanStringValue(form[field])
+}
+
+function getCurrentDirectFieldValue(business: Business, field: DirectUpdateField) {
+  const currentValue = business[field]
+
+  if (field === 'website' || field === 'facebook' || field === 'instagram') {
+    return cleanUrlValue(typeof currentValue === 'string' ? currentValue : '')
+  }
+
+  return cleanStringValue(typeof currentValue === 'string' ? currentValue : '')
+}
+
+function getPreparedReviewFieldValue({
+  field,
+  form,
+  useExternalReviews,
+  externalReviewUrl,
+}: {
+  field: ReviewField
+  form: FormState
+  useExternalReviews: boolean
+  externalReviewUrl: string | null
+}): PendingChangeValue {
+  if (field === 'business_name') return form.business_name.trim()
+  if (field === 'category_id') return form.category_id || null
+  if (field === 'description') return cleanStringValue(form.description)
+  if (field === 'services') return cleanStringValue(form.services)
+  if (field === 'logo_url') return cleanStringValue(form.logo_url)
+  if (field === 'use_external_reviews') return useExternalReviews
+
+  if (field === 'external_review_platform') {
+    return useExternalReviews ? cleanStringValue(form.external_review_platform) : null
+  }
+
+  if (field === 'external_review_url') {
+    return useExternalReviews ? externalReviewUrl : null
+  }
+
+  return null
+}
+
+function getCurrentReviewFieldValue(
+  business: Business,
+  field: ReviewField
+): PendingChangeValue {
+  if (field === 'use_external_reviews') return business.use_external_reviews === true
+
+  const currentValue = business[field as keyof Business]
+
+  if (field === 'external_review_url') {
+    return cleanUrlValue(typeof currentValue === 'string' ? currentValue : '')
+  }
+
+  return cleanStringValue(typeof currentValue === 'string' ? currentValue : '')
+}
+
+function getPendingFieldLabels(business: Business | null) {
+  const changedFields = business?.pending_changed_fields ?? []
+
+  return changedFields
+    .filter((field) => field !== 'slug')
+    .map((field) => FIELD_LABELS[field] ?? field.replaceAll('_', ' '))
+}
+
 export default function BusinessDashboardPage() {
   const router = useRouter()
 
@@ -172,6 +391,7 @@ export default function BusinessDashboardPage() {
   const [notice, setNotice] = useState('')
 
   const isBusinessListing = (business?.listing_type ?? 'business') === 'business'
+  const isApprovedBusiness = business?.status === 'approved' || business?.is_approved === true
 
   const tier = isBusinessListing ? getListingTier(form) : 'free'
   const tierLabel = getTierLabel(tier)
@@ -194,10 +414,10 @@ export default function BusinessDashboardPage() {
     setSelectedBusinessId(loadedBusiness.id)
 
     setForm({
-      business_name: loadedBusiness.business_name ?? '',
-      category_id: loadedBusiness.category_id ?? '',
-      description: loadedBusiness.description ?? '',
-      services: loadedBusiness.services ?? '',
+      business_name: getEditableTextValue(loadedBusiness, 'business_name'),
+      category_id: getEditableTextValue(loadedBusiness, 'category_id'),
+      description: getEditableTextValue(loadedBusiness, 'description'),
+      services: getEditableTextValue(loadedBusiness, 'services'),
       phone: loadedBusiness.phone ?? '',
       email: loadedBusiness.email ?? '',
       website: loadedBusiness.website ?? '',
@@ -209,12 +429,21 @@ export default function BusinessDashboardPage() {
       postcode: loadedBusiness.postcode ?? '',
       service_area: loadedBusiness.service_area ?? '',
       opening_times: loadedBusiness.opening_times ?? '',
-      logo_url: loadedBusiness.logo_url ?? '',
+      logo_url: getEditableTextValue(loadedBusiness, 'logo_url'),
       is_featured: loadedBusiness.is_featured ?? false,
       is_premium: loadedBusiness.is_premium ?? false,
-      use_external_reviews: loadedBusiness.use_external_reviews ?? false,
-      external_review_platform: loadedBusiness.external_review_platform ?? '',
-      external_review_url: loadedBusiness.external_review_url ?? '',
+      use_external_reviews: getEditableBooleanValue(
+        loadedBusiness,
+        'use_external_reviews'
+      ),
+      external_review_platform: getEditableTextValue(
+        loadedBusiness,
+        'external_review_platform'
+      ),
+      external_review_url: getEditableTextValue(
+        loadedBusiness,
+        'external_review_url'
+      ),
     })
   }
 
@@ -255,36 +484,7 @@ export default function BusinessDashboardPage() {
 
     const { data: businessRows, error: businessError } = await supabase
       .from('businesses')
-      .select(
-        `
-        id,
-        business_name,
-        slug,
-        category_id,
-        listing_type,
-        status,
-        description,
-        services,
-        phone,
-        email,
-        website,
-        facebook,
-        instagram,
-        address_line_1,
-        address_line_2,
-        town,
-        postcode,
-        service_area,
-        opening_times,
-        logo_url,
-        is_approved,
-        is_featured,
-        is_premium,
-        use_external_reviews,
-        external_review_platform,
-        external_review_url
-      `
-      )
+      .select(BUSINESS_SELECT)
       .eq('owner_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -411,7 +611,12 @@ export default function BusinessDashboardPage() {
     }))
 
     setUploadingLogo(false)
-    setSuccess('Logo uploaded. Remember to save your listing.')
+
+    if (isApprovedBusiness) {
+      setSuccess('Logo uploaded. Save your listing to send the new logo for review.')
+    } else {
+      setSuccess('Logo uploaded. Remember to save your listing.')
+    }
   }
 
   async function saveBusiness(event: FormEvent<HTMLFormElement>) {
@@ -445,8 +650,9 @@ export default function BusinessDashboardPage() {
       return
     }
 
-    const useExternalReviews = isBusinessListing && form.use_external_reviews
-    const externalReviewUrl = normaliseUrl(form.external_review_url)
+    const savingBusinessListing = (business?.listing_type ?? 'business') === 'business'
+    const useExternalReviews = savingBusinessListing && form.use_external_reviews
+    const externalReviewUrl = cleanUrlValue(form.external_review_url)
 
     if (useExternalReviews && !form.external_review_platform.trim()) {
       setError('Please choose the external review platform.')
@@ -485,34 +691,186 @@ export default function BusinessDashboardPage() {
       return
     }
 
+    if (business && isApprovedBusiness) {
+      await saveApprovedBusinessChanges({
+        business,
+        externalReviewUrl,
+        slug,
+        useExternalReviews,
+        userId: user.id,
+      })
+      return
+    }
+
+    await saveFullPendingBusiness({
+      externalReviewUrl,
+      slug,
+      useExternalReviews,
+      userId: user.id,
+    })
+  }
+
+  async function saveApprovedBusinessChanges({
+    business,
+    externalReviewUrl,
+    slug,
+    useExternalReviews,
+    userId,
+  }: {
+    business: Business
+    externalReviewUrl: string | null
+    slug: string
+    useExternalReviews: boolean
+    userId: string
+  }) {
+    const directUpdates: Record<string, PendingChangeValue> = {}
+
+    DIRECT_UPDATE_FIELDS.forEach((field) => {
+      const proposedValue = getPreparedDirectFieldValue(field, form)
+      const currentValue = getCurrentDirectFieldValue(business, field)
+
+      if (!valuesMatch(proposedValue, currentValue)) {
+        directUpdates[field] = proposedValue
+      }
+    })
+
+    const pendingChanges: PendingChanges = {
+      ...getPendingChanges(business),
+    }
+
+    const pendingChangedFields = new Set<string>(
+      (business.pending_changed_fields ?? []).filter((field) =>
+        REVIEW_FIELDS.includes(field as ReviewField)
+      )
+    )
+
+    REVIEW_FIELDS.forEach((field) => {
+      const proposedValue = getPreparedReviewFieldValue({
+        field,
+        form,
+        useExternalReviews,
+        externalReviewUrl,
+      })
+      const currentValue = getCurrentReviewFieldValue(business, field)
+
+      if (!valuesMatch(proposedValue, currentValue)) {
+        pendingChanges[field] = proposedValue
+        pendingChangedFields.add(field)
+      } else {
+        delete pendingChanges[field]
+        pendingChangedFields.delete(field)
+      }
+    })
+
+    if (!valuesMatch(form.business_name.trim(), business.business_name)) {
+      pendingChanges.slug = slug
+    } else {
+      delete pendingChanges.slug
+    }
+
+    const changedFields = Array.from(pendingChangedFields)
+    const hasPendingChanges = changedFields.length > 0
+    const now = new Date().toISOString()
+
+    const updatePayload = {
+      ...directUpdates,
+      pending_changes: hasPendingChanges ? pendingChanges : {},
+      pending_changed_fields: changedFields,
+      has_pending_changes: hasPendingChanges,
+      changes_submitted_at: hasPendingChanges ? now : null,
+      changes_submitted_by: hasPendingChanges ? userId : null,
+      changes_reviewed_at: null,
+      changes_reviewed_by: null,
+      change_rejection_reason: null,
+      updated_at: now,
+    }
+
+    const { data: updatedBusiness, error: updateError } = await supabase
+      .from('businesses')
+      .update(updatePayload)
+      .eq('id', business.id)
+      .eq('owner_id', userId)
+      .select(BUSINESS_SELECT)
+      .single()
+
+    if (updateError) {
+      setError(updateError.message)
+      setSaving(false)
+      return
+    }
+
+    const updated = updatedBusiness as Business
+
+    setOwnedBusinesses((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item))
+    )
+
+    loadBusinessIntoForm(updated)
+
+    if (hasPendingChanges && Object.keys(directUpdates).length > 0) {
+      setSuccess(
+        'Your safe changes have been saved. Some changes have been sent for review while your current approved listing stays live.'
+      )
+    } else if (hasPendingChanges) {
+      setSuccess(
+        'Your changes have been sent for review. Your current approved listing is still live.'
+      )
+    } else {
+      setSuccess('Your business listing has been updated.')
+    }
+
+    setSaving(false)
+  }
+
+  async function saveFullPendingBusiness({
+    externalReviewUrl,
+    slug,
+    useExternalReviews,
+    userId,
+  }: {
+    externalReviewUrl: string | null
+    slug: string
+    useExternalReviews: boolean
+    userId: string
+  }) {
+    const now = new Date().toISOString()
+
     const payload = {
-      owner_id: user.id,
+      owner_id: userId,
       business_name: form.business_name.trim(),
       slug,
       category_id: form.category_id || null,
       listing_type: business?.listing_type ?? 'business',
-      description: form.description.trim() || null,
-      services: form.services.trim() || null,
-      phone: form.phone.trim() || null,
-      email: form.email.trim() || null,
-      website: normaliseUrl(form.website) || null,
-      facebook: normaliseUrl(form.facebook) || null,
-      instagram: normaliseUrl(form.instagram) || null,
-      address_line_1: form.address_line_1.trim() || null,
-      address_line_2: form.address_line_2.trim() || null,
-      town: form.town.trim() || null,
-      postcode: form.postcode.trim() || null,
-      service_area: form.service_area.trim() || null,
-      opening_times: form.opening_times.trim() || null,
-      logo_url: form.logo_url.trim() || null,
+      description: cleanStringValue(form.description),
+      services: cleanStringValue(form.services),
+      phone: cleanStringValue(form.phone),
+      email: cleanStringValue(form.email),
+      website: cleanUrlValue(form.website),
+      facebook: cleanUrlValue(form.facebook),
+      instagram: cleanUrlValue(form.instagram),
+      address_line_1: cleanStringValue(form.address_line_1),
+      address_line_2: cleanStringValue(form.address_line_2),
+      town: cleanStringValue(form.town),
+      postcode: cleanStringValue(form.postcode),
+      service_area: cleanStringValue(form.service_area),
+      opening_times: cleanStringValue(form.opening_times),
+      logo_url: cleanStringValue(form.logo_url),
       use_external_reviews: useExternalReviews,
       external_review_platform: useExternalReviews
-        ? form.external_review_platform.trim()
+        ? cleanStringValue(form.external_review_platform)
         : null,
       external_review_url: useExternalReviews ? externalReviewUrl : null,
       is_approved: false,
       status: 'pending',
-      updated_at: new Date().toISOString(),
+      pending_changes: {},
+      pending_changed_fields: [],
+      has_pending_changes: false,
+      changes_submitted_at: null,
+      changes_submitted_by: null,
+      changes_reviewed_at: null,
+      changes_reviewed_by: null,
+      change_rejection_reason: null,
+      updated_at: now,
     }
 
     if (business) {
@@ -520,37 +878,8 @@ export default function BusinessDashboardPage() {
         .from('businesses')
         .update(payload)
         .eq('id', business.id)
-        .eq('owner_id', user.id)
-        .select(
-          `
-          id,
-          business_name,
-          slug,
-          category_id,
-          listing_type,
-          status,
-          description,
-          services,
-          phone,
-          email,
-          website,
-          facebook,
-          instagram,
-          address_line_1,
-          address_line_2,
-          town,
-          postcode,
-          service_area,
-          opening_times,
-          logo_url,
-          is_approved,
-          is_featured,
-          is_premium,
-          use_external_reviews,
-          external_review_platform,
-          external_review_url
-        `
-        )
+        .eq('owner_id', userId)
+        .select(BUSINESS_SELECT)
         .single()
 
       if (updateError) {
@@ -566,7 +895,7 @@ export default function BusinessDashboardPage() {
       )
 
       loadBusinessIntoForm(updated)
-      setSuccess('Business listing saved. Changes are now awaiting approval.')
+      setSuccess('Business listing saved. It is now awaiting approval.')
       setSaving(false)
       return
     }
@@ -577,38 +906,9 @@ export default function BusinessDashboardPage() {
         ...payload,
         is_featured: false,
         is_premium: false,
-        created_at: new Date().toISOString(),
+        created_at: now,
       })
-      .select(
-        `
-        id,
-        business_name,
-        slug,
-        category_id,
-        listing_type,
-        status,
-        description,
-        services,
-        phone,
-        email,
-        website,
-        facebook,
-        instagram,
-        address_line_1,
-        address_line_2,
-        town,
-        postcode,
-        service_area,
-        opening_times,
-        logo_url,
-        is_approved,
-        is_featured,
-        is_premium,
-        use_external_reviews,
-        external_review_platform,
-        external_review_url
-      `
-      )
+      .select(BUSINESS_SELECT)
       .single()
 
     if (insertError) {
@@ -671,6 +971,7 @@ export default function BusinessDashboardPage() {
               )}
 
               <StatusBadge business={business} />
+              <PendingChangesBadge business={business} />
             </div>
           </div>
         </section>
@@ -696,6 +997,48 @@ export default function BusinessDashboardPage() {
             <p className="mt-2 text-sm text-stone-600">
               Select the business you want to update. The status badge above
               shows the approval status for the selected listing.
+            </p>
+          </section>
+        )}
+
+        {business?.has_pending_changes && (
+          <section className="rounded-3xl bg-amber-50 p-6 shadow-sm ring-1 ring-amber-200">
+            <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">
+              Changes awaiting review
+            </p>
+
+            <h2 className="mt-1 text-xl font-bold text-amber-950">
+              Your approved listing is still live
+            </h2>
+
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-900">
+              The form below shows your proposed changes. These changes will only
+              appear publicly once they have been reviewed.
+            </p>
+
+            {getPendingFieldLabels(business).length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {getPendingFieldLabels(business).map((fieldLabel) => (
+                  <span
+                    key={fieldLabel}
+                    className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-900 ring-1 ring-amber-200"
+                  >
+                    {fieldLabel}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {business?.change_rejection_reason && !business.has_pending_changes && (
+          <section className="rounded-3xl bg-red-50 p-6 shadow-sm ring-1 ring-red-200">
+            <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
+              Previous change request rejected
+            </p>
+
+            <p className="mt-2 text-sm leading-6 text-red-900">
+              {business.change_rejection_reason}
             </p>
           </section>
         )}
@@ -1063,7 +1406,9 @@ export default function BusinessDashboardPage() {
 
           <div className="flex flex-col gap-3 border-t border-stone-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-stone-600">
-              Saving changes will send your listing back for approval.
+              {isApprovedBusiness
+                ? 'Contact, address and opening-time changes update immediately. Name, category, description, services, logo and review settings are sent for review.'
+                : 'Saving changes will submit your listing for approval.'}
             </p>
 
             <button
@@ -1196,6 +1541,16 @@ function StatusBadge({ business }: { business: Business | null }) {
   return (
     <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
       Awaiting approval
+    </span>
+  )
+}
+
+function PendingChangesBadge({ business }: { business: Business | null }) {
+  if (!business?.has_pending_changes) return null
+
+  return (
+    <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+      Changes pending review
     </span>
   )
 }
