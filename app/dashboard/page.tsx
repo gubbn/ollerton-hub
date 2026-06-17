@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [business, setBusiness] = useState<Business | null>(null)
   const [stats, setStats] = useState<Stats>(emptyStats)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     loadDashboard()
@@ -59,13 +60,24 @@ export default function DashboardPage() {
       return
     }
 
-    const { data: businessData } = await supabase
-      .from('businesses')
-      .select(
-        'id, business_name, slug, is_approved, is_featured, is_premium'
-      )
-      .eq('owner_id', user.id)
-      .maybeSingle()
+    const [{ data: profileData }, { data: businessData }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .maybeSingle(),
+
+      supabase
+        .from('businesses')
+        .select(
+          'id, business_name, slug, is_approved, is_featured, is_premium'
+        )
+        .eq('owner_id', user.id)
+        .neq('listing_type', 'community')
+        .maybeSingle(),
+    ])
+
+    setIsAdmin(profileData?.is_admin === true)
 
     if (businessData) {
       const loadedBusiness = businessData as Business
@@ -74,6 +86,9 @@ export default function DashboardPage() {
       // Keep loading stats for all businesses.
       // Only Premium users see the numbers on the dashboard.
       await loadStats(loadedBusiness.id)
+    } else {
+      setBusiness(null)
+      setStats(emptyStats)
     }
 
     setLoading(false)
@@ -123,9 +138,7 @@ export default function DashboardPage() {
                 Business dashboard
               </p>
 
-              <h1 className="mt-2 text-3xl font-bold">
-                Welcome back
-              </h1>
+              <h1 className="mt-2 text-3xl font-bold">Welcome back</h1>
 
               <p className="mt-3 max-w-2xl text-stone-200">
                 Manage your Ollerton Hub listing, update your business details
@@ -134,6 +147,7 @@ export default function DashboardPage() {
             </div>
 
             <button
+              type="button"
               onClick={signOut}
               className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
             >
@@ -141,7 +155,7 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {business && (
+          {business ? (
             <div className="mt-6 flex flex-wrap gap-3">
               {business.is_approved ? (
                 <span className="rounded-xl bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
@@ -153,22 +167,22 @@ export default function DashboardPage() {
                 </span>
               )}
 
-              {business.is_featured && (
+              {business.is_featured ? (
                 <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
                   Featured listing
                 </span>
-              )}
+              ) : null}
 
-              {business.is_premium && (
+              {business.is_premium ? (
                 <span className="rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-800">
                   Premium listing
                 </span>
-              )}
+              ) : null}
             </div>
-          )}
+          ) : null}
         </section>
 
-        {business && (
+        {business ? (
           <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -181,14 +195,14 @@ export default function DashboardPage() {
                 </h2>
               </div>
 
-              {business.is_approved && (
+              {business.is_approved ? (
                 <Link
                   href={`/business/${business.slug}`}
                   className="text-sm font-medium text-red-700 hover:underline"
                 >
                   View public listing →
                 </Link>
-              )}
+              ) : null}
             </div>
 
             {business.is_premium ? (
@@ -211,11 +225,13 @@ export default function DashboardPage() {
               <LockedMetrics isFeatured={business.is_featured} />
             )}
           </section>
-        )}
+        ) : null}
 
-        <section className="grid gap-5 md:grid-cols-2">
+        <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           <DashboardCard
-            title={business ? 'Edit business listing' : 'Create business listing'}
+            title={
+              business ? 'Edit business listing' : 'Create business listing'
+            }
             description={
               business
                 ? 'Update your business details, logo, opening times and contact information.'
@@ -231,9 +247,19 @@ export default function DashboardPage() {
             href="/directory"
             buttonText="Show directory"
           />
+
+          {isAdmin ? (
+            <DashboardCard
+              title="Admin centre"
+              description="Manage businesses, local amenities, reviews, settings and directory moderation."
+              href="/admin"
+              buttonText="Open admin centre"
+              admin
+            />
+          ) : null}
         </section>
 
-        {!business && (
+        {!business ? (
           <section className="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-200">
             <h2 className="text-lg font-bold text-amber-900">
               No business listing yet
@@ -244,7 +270,7 @@ export default function DashboardPage() {
               in the public directory.
             </p>
           </section>
-        )}
+        ) : null}
       </div>
     </main>
   )
@@ -319,21 +345,33 @@ function DashboardCard({
   description,
   href,
   buttonText,
+  admin = false,
 }: {
   title: string
   description: string
   href: string
   buttonText: string
+  admin?: boolean
 }) {
   return (
-    <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
+    <div
+      className={`rounded-3xl p-6 shadow-sm ring-1 ${
+        admin
+          ? 'bg-red-50 ring-red-200'
+          : 'bg-white ring-stone-200'
+      }`}
+    >
       <h2 className="text-xl font-bold text-stone-900">{title}</h2>
 
-      <p className="mt-3 text-sm text-stone-600">{description}</p>
+      <p className="mt-3 text-sm leading-6 text-stone-600">{description}</p>
 
       <Link
         href={href}
-        className="mt-5 inline-block rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+        className={`mt-5 inline-block rounded-xl px-4 py-2 text-sm font-semibold text-white ${
+          admin
+            ? 'bg-stone-900 hover:bg-stone-800'
+            : 'bg-red-700 hover:bg-red-800'
+        }`}
       >
         {buttonText}
       </Link>
