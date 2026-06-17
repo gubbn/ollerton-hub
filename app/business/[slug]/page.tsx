@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import BusinessStatTracker from './BusinessStatTracker'
+import ListingBadges from '@/app/components/ListingBadges'
 
 type BusinessPageProps = {
   params: Promise<{ slug: string }>
@@ -192,31 +193,19 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                   {business.business_name}
                 </h1>
 
-                <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-200">
-                  {isCommunity
-                    ? 'Useful local information for residents in and around Ollerton.'
-                    : 'Local business information, services and contact details.'}
-                </p>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {isCommunity ? (
-                    <span className="inline-block rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">
-                      Local amenity
-                    </span>
-                  ) : null}
-
-                  {business.is_premium && !isCommunity ? (
-                    <span className="inline-block rounded-full bg-white px-3 py-1 text-sm font-semibold text-stone-900">
-                      Premium listing
-                    </span>
-                  ) : null}
-
-                  {business.is_featured && !isCommunity ? (
-                    <span className="inline-block rounded-full bg-red-600 px-3 py-1 text-sm font-semibold text-white">
-                      Featured listing
-                    </span>
-                  ) : null}
-                </div>
+               {isCommunity ? (
+  <div className="mt-3 flex flex-wrap gap-2">
+    <span className="inline-block rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">
+      Local amenity
+    </span>
+  </div>
+) : (
+  <ListingBadges
+    listingType={business.listing_type}
+    isPremium={business.is_premium}
+    isFeatured={business.is_featured}
+  />
+)}
 
                 {averageRating !== null && !isCommunity ? (
                   <p className="mt-3 text-stone-100">
