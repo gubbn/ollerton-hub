@@ -258,9 +258,11 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                         className="rounded-xl border border-stone-200 p-4"
                       >
                         <p className="font-semibold">{review.reviewer_name}</p>
+
                         <p className="mt-1 text-sm text-amber-600">
                           {'⭐'.repeat(review.rating)}
                         </p>
+
                         <p className="mt-3 text-stone-700">
                           {review.review_text}
                         </p>
@@ -273,17 +275,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                   )}
                 </div>
               </div>
-            ) : (
-              <div className="rounded-2xl bg-red-50 p-6 shadow-sm ring-1 ring-red-100">
-                <h2 className="text-xl font-bold text-red-950">
-                  Reviews disabled
-                </h2>
-                <p className="mt-3 text-sm leading-6 text-red-900">
-                  This listing is included as useful local information rather
-                  than as a business listing, so reviews are not collected here.
-                </p>
-              </div>
-            )}
+            ) : null}
           </div>
 
           <aside className="space-y-6">
@@ -405,7 +397,9 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
             {business.opening_times ? (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
                 <h2 className="text-xl font-bold">
-                  {isCommunity ? 'Opening times / availability' : 'Opening times'}
+                  {isCommunity
+                    ? 'Opening times / availability'
+                    : 'Opening times'}
                 </h2>
 
                 <p className="mt-4 whitespace-pre-line text-sm text-stone-700">
@@ -420,8 +414,14 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               </h2>
 
               <div className="mt-4 text-sm text-stone-700">
-                {business.address_line_1 ? <p>{business.address_line_1}</p> : null}
-                {business.address_line_2 ? <p>{business.address_line_2}</p> : null}
+                {business.address_line_1 ? (
+                  <p>{business.address_line_1}</p>
+                ) : null}
+
+                {business.address_line_2 ? (
+                  <p>{business.address_line_2}</p>
+                ) : null}
+
                 {business.town ? <p>{business.town}</p> : null}
                 {business.postcode ? <p>{business.postcode}</p> : null}
 
@@ -455,6 +455,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
             {isCommunity ? (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
                 <h2 className="text-xl font-bold">Suggest an update</h2>
+
                 <p className="mt-3 text-sm leading-6 text-stone-700">
                   Is this local information missing something or out of date?
                   Let us know so it can be reviewed.
