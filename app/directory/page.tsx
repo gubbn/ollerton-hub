@@ -33,68 +33,49 @@ type Listing = {
   categories: CategoryRelation
 }
 
-const amenityTypes = [
-  'School',
-  'Place of worship',
-  'Council service',
-  'MP / Councillor',
-  'Recycling centre',
-  'Community venue',
-  'Emergency / public service',
-  'Local information',
-  'Other',
-]
-
-function isCommunityListing(listing: Listing) {
-  return listing.listing_type === 'community'
-}
-
 function getCategoryName(categories: CategoryRelation) {
   if (!categories) return 'Local listing'
-
-  if (Array.isArray(categories)) {
-    return categories[0]?.name ?? 'Local listing'
-  }
-
+  if (Array.isArray(categories)) return categories[0]?.name ?? 'Local listing'
   return categories.name
 }
 
 function getCategorySlug(categories: CategoryRelation) {
   if (!categories) return ''
-
-  if (Array.isArray(categories)) {
-    return categories[0]?.slug ?? ''
-  }
-
+  if (Array.isArray(categories)) return categories[0]?.slug ?? ''
   return categories.slug
 }
 
-function getListingLabel(listing: Listing) {
-  if (isCommunityListing(listing)) {
-    return listing.useful_listing_type || 'Local information'
-  }
-
+function getListingTypeLabel(listing: Listing) {
+  if (listing.useful_listing_type) return listing.useful_listing_type
   return getCategoryName(listing.categories)
 }
 
-function getBadgeListingType(listing: Listing) {
-  if (isCommunityListing(listing)) return 'community'
-  return listing.listing_type ?? 'business'
+function cleanSearchValue(value: string | null) {
+  return value?.trim() ?? ''
+}
+
+function isOtherCategory(category: Category) {
+  return (
+    category.slug.toLowerCase() === 'other' ||
+    category.name.toLowerCase() === 'other'
+  )
 }
 
 function DirectoryContent() {
   const searchParams = useSearchParams()
 
-  const initialSearch = searchParams.get('search') || ''
-  const initialCategory = searchParams.get('category') || ''
-
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [listings, setListings] = useState<Listing[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [search, setSearch] = useState(initialSearch)
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory)
-  const [selectedTown, setSelectedTown] = useState('')
+  const [error, setError] = useState('')
+
+  const [search, setSearch] = useState(cleanSearchValue(searchParams.get('q')))
+  const [categoryFilter, setCategoryFilter] = useState(
+    cleanSearchValue(searchParams.get('category'))
+  )
+  const [townFilter, setTownFilter] = useState(
+    cleanSearchValue(searchParams.get('town'))
+  )
 
   useEffect(() => {
     loadDirectory()
@@ -104,20 +85,15 @@ function DirectoryContent() {
     setLoading(true)
     setError('')
 
-    const [
-      { data: categoryData, error: categoryError },
-      { data: listingData, error: listingError },
-    ] = await Promise.all([
+    const [categoriesResult, listingsResult] = await Promise.all([
       supabase
         .from('categories')
         .select('id, name, slug, description')
-        .neq('name', 'Other')
         .order('name', { ascending: true }),
 
       supabase
         .from('businesses')
-        .select(
-          `
+        .select(`
           id,
           business_name,
           slug,
@@ -133,319 +109,238 @@ function DirectoryContent() {
             name,
             slug
           )
-        `
-        )
+        `)
         .eq('is_approved', true)
+        .order('is_premium', { ascending: false })
+        .order('is_featured', { ascending: false })
         .order('business_name', { ascending: true }),
     ])
 
-    if (categoryError) {
-      setError(categoryError.message)
-      setCategories([])
+    if (categoriesResult.error) {
+      setError(categoriesResult.error.message)
     } else {
-      setCategories((categoryData ?? []) as Category[])
+      const visibleCategories = ((categoriesResult.data || []) as Category[]).filter(
+        (category) => !isOtherCategory(category)
+      )
+
+      setCategories(visibleCategories)
     }
 
-    if (listingError) {
-      setError(listingError.message)
+    if (listingsResult.error) {
+      setError(listingsResult.error.message)
       setListings([])
     } else {
-      setListings((listingData ?? []) as Listing[])
+      setListings((listingsResult.data || []) as Listing[])
     }
 
     setLoading(false)
   }
 
   const towns = useMemo(() => {
-    const uniqueTowns = new Set<string>()
-
-    listings.forEach((listing) => {
-      if (listing.town?.trim()) {
-        uniqueTowns.add(listing.town.trim())
-      }
-    })
-
-    return Array.from(uniqueTowns).sort((a, b) => a.localeCompare(b))
+    return Array.from(
+      new Set(
+        listings
+          .map((listing) => listing.town?.trim())
+          .filter((town): town is string => Boolean(town))
+      )
+    ).sort((a, b) => a.localeCompare(b))
   }, [listings])
 
   const filteredListings = useMemo(() => {
-    const searchTerm = search.trim().toLowerCase()
+    const searchTerm = search.toLowerCase().trim()
 
-    return listings
-      .filter((listing) => {
-        const categoryName = getCategoryName(listing.categories)
-        const categorySlug = getCategorySlug(listing.categories)
+    return listings.filter((listing) => {
+      const categoryName = getCategoryName(listing.categories)
+      const categorySlug = getCategorySlug(listing.categories)
 
-        const searchableText = [
-          listing.business_name,
-          listing.description,
-          listing.town,
-          listing.service_area,
-          listing.useful_listing_type,
-          categoryName,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
+      const searchableText = `
+        ${listing.business_name}
+        ${listing.description || ''}
+        ${listing.town || ''}
+        ${listing.service_area || ''}
+        ${categoryName}
+        ${listing.useful_listing_type || ''}
+      `.toLowerCase()
 
-        const matchesSearch = searchTerm
-          ? searchableText.includes(searchTerm)
-          : true
+      const matchesSearch = searchTerm
+        ? searchableText.includes(searchTerm)
+        : true
 
-        const matchesCategory = selectedCategory
-          ? selectedCategory.startsWith('amenity:')
-            ? isCommunityListing(listing) &&
-              listing.useful_listing_type ===
-                selectedCategory.replace('amenity:', '')
-            : categorySlug === selectedCategory
-          : true
+      const matchesCategory = categoryFilter
+        ? categorySlug === categoryFilter
+        : true
 
-        const matchesTown = selectedTown ? listing.town === selectedTown : true
+      const matchesTown = townFilter ? listing.town === townFilter : true
 
-        return matchesSearch && matchesCategory && matchesTown
-      })
-      .sort((a, b) => {
-        const aIsCommunity = isCommunityListing(a)
-        const bIsCommunity = isCommunityListing(b)
-
-        const aPremium = a.is_premium === true && !aIsCommunity
-        const bPremium = b.is_premium === true && !bIsCommunity
-
-        const aFeatured = a.is_featured === true && !aIsCommunity
-        const bFeatured = b.is_featured === true && !bIsCommunity
-
-        if (aPremium && !bPremium) return -1
-        if (!aPremium && bPremium) return 1
-
-        if (aFeatured && !bFeatured) return -1
-        if (!aFeatured && bFeatured) return 1
-
-        return a.business_name.localeCompare(b.business_name)
-      })
-  }, [listings, search, selectedCategory, selectedTown])
+      return matchesSearch && matchesCategory && matchesTown
+    })
+  }, [listings, search, categoryFilter, townFilter])
 
   function clearFilters() {
     setSearch('')
-    setSelectedCategory('')
-    setSelectedTown('')
+    setCategoryFilter('')
+    setTownFilter('')
   }
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
-        <section className="mx-auto max-w-6xl">
-          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-            Loading directory...
-          </div>
+      <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900">
+        <section className="mx-auto max-w-[1500px]">
+          <p>Loading directory...</p>
         </section>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
-      <section className="mx-auto max-w-6xl space-y-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
-              Ollerton Hub
-            </p>
+    <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900">
+      <section className="mx-auto max-w-[1500px]">
+        <div className="rounded-3xl bg-stone-900 p-5 text-white shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-red-300">
+            Ollerton Hub Directory
+          </p>
 
-            <h1 className="text-3xl font-bold text-stone-950">Directory</h1>
+          <h1 className="mt-2 text-2xl font-bold md:text-3xl">
+            Find local businesses and useful local information
+          </h1>
 
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
-              Search local businesses, services, schools, places of worship,
-              community spaces and useful local information.
-            </p>
-          </div>
-
-          <Link
-            href="/register"
-            className="rounded-full bg-red-700 px-5 py-3 text-sm font-bold text-white hover:bg-red-800"
-          >
-            Add your business
-          </Link>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-200">
+            Search local businesses, services, schools, places of worship,
+            community listings and useful contacts around Ollerton.
+          </p>
         </div>
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">
-            {error}
-          </div>
-        ) : null}
+        <section className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
+          <div className="grid gap-3 lg:grid-cols-4">
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by name, service or description..."
+              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm text-stone-900 lg:col-span-2"
+            />
 
-        <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-200">
-          <div className="grid gap-4 lg:grid-cols-4">
-            <label className="grid gap-2 text-sm font-semibold text-stone-800 lg:col-span-2">
-              Search
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search businesses, schools, churches, recycling, food, trades..."
-                className="rounded-2xl border border-stone-300 px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-              />
-            </label>
+            <select
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm text-stone-900"
+            >
+              <option value="">All categories</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.slug}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
 
-            <label className="grid gap-2 text-sm font-semibold text-stone-800">
-              Category or place type
-              <select
-                value={selectedCategory}
-                onChange={(event) => setSelectedCategory(event.target.value)}
-                className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-              >
-                <option value="">All categories and places</option>
-
-                {categories.length > 0 ? (
-                  <optgroup label="Business categories">
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.slug}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-
-                <optgroup label="Useful local places">
-                  {amenityTypes.map((type) => (
-                    <option key={type} value={`amenity:${type}`}>
-                      {type}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-            </label>
-
-            <label className="grid gap-2 text-sm font-semibold text-stone-800">
-              Town
-              <select
-                value={selectedTown}
-                onChange={(event) => setSelectedTown(event.target.value)}
-                className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
-              >
-                <option value="">All towns</option>
-
-                {towns.map((town) => (
-                  <option key={town} value={town}>
-                    {town}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <select
+              value={townFilter}
+              onChange={(event) => setTownFilter(event.target.value)}
+              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm text-stone-900"
+            >
+              <option value="">All towns</option>
+              {towns.map((town) => (
+                <option key={town} value={town}>
+                  {town}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-semibold text-stone-700">
-              {filteredListings.length}{' '}
-              {filteredListings.length === 1 ? 'listing' : 'listings'} found
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-stone-600">
+              Showing {filteredListings.length} of {listings.length} listings.
             </p>
 
             <button
               type="button"
               onClick={clearFilters}
-              className="text-left text-sm font-bold text-red-700 hover:underline sm:text-right"
+              className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-800"
             >
               Clear filters
             </button>
           </div>
         </section>
 
-        <section>
-          {filteredListings.length === 0 ? (
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-              <h2 className="text-xl font-bold text-stone-950">
-                No listings found
-              </h2>
+        {error ? (
+          <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-200">
+            {error}
+          </p>
+        ) : null}
 
-              <p className="mt-2 text-sm leading-6 text-stone-700">
-                Try a different search term, category or town.
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredListings.map((listing) => {
-                const categoryName = getCategoryName(listing.categories)
-                const isCommunity = isCommunityListing(listing)
+        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {filteredListings.map((listing) => (
+            <Link
+              key={listing.id}
+              href={`/business/${listing.slug}`}
+              className="group rounded-2xl bg-white p-3 shadow-sm ring-1 ring-stone-200 transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="flex items-start gap-2.5">
+                {listing.logo_url ? (
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-stone-100 ring-1 ring-stone-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={listing.logo_url}
+                      alt={`${listing.business_name} logo`}
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                ) : null}
 
-                return (
-                  <Link
-                    key={listing.id}
-                    href={`/business/${listing.slug}`}
-                    className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-stone-200 transition hover:-translate-y-0.5 hover:shadow-md"
-                  >
-                    <div className="flex items-start gap-3">
-  {listing.logo_url ? (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-stone-200 text-sm font-bold text-stone-700">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={listing.logo_url}
-        alt={`${listing.business_name} logo`}
-        className="h-full w-full object-cover"
-      />
-    </div>
-  ) : null}
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-bold leading-snug text-stone-950 group-hover:text-red-700">
+                    {listing.business_name}
+                  </h2>
 
-  <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-start gap-1.5">
-                          <h2 className="line-clamp-2 text-sm font-bold leading-5 text-stone-950">
-                            {listing.business_name}
-                          </h2>
+                  <ListingBadges
+                    isFeatured={listing.is_featured}
+                    isPremium={listing.is_premium}
+                    listingType={listing.listing_type}
+                    usefulListingType={listing.useful_listing_type}
+                    className="mt-1.5"
+                  />
 
-                          {isCommunity ? (
-                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-800">
-                              Local info
-                            </span>
-                          ) : null}
-                        </div>
+                  <p className="mt-1.5 text-[11px] font-bold uppercase tracking-wide text-red-700">
+                    {getListingTypeLabel(listing)}
+                  </p>
+                </div>
+              </div>
 
-                        <p className="mt-1 line-clamp-1 text-[11px] font-bold uppercase tracking-wide text-red-700">
-                          {getListingLabel(listing)}
-                        </p>
+              {listing.description ? (
+                <p className="mt-3 line-clamp-2 text-xs leading-5 text-stone-600">
+                  {listing.description}
+                </p>
+              ) : (
+                <p className="mt-3 text-xs leading-5 text-stone-600">
+                  View this local listing.
+                </p>
+              )}
 
-                        {!isCommunity ? (
-                          <ListingBadges
-                            listingType={getBadgeListingType(listing)}
-                            isPremium={listing.is_premium}
-                            isFeatured={listing.is_featured}
-                            compact
-                          />
-                        ) : null}
-                      </div>
-                    </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {listing.town ? (
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-semibold text-stone-700">
+                    {listing.town}
+                  </span>
+                ) : null}
 
-                    {listing.description ? (
-                      <p className="mt-3 line-clamp-2 text-xs leading-5 text-stone-700">
-                        {listing.description}
-                      </p>
-                    ) : (
-                      <p className="mt-3 text-xs leading-5 text-stone-700">
-                        View this local listing.
-                      </p>
-                    )}
-
-                    <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold text-stone-600">
-                      {listing.town ? (
-                        <span className="rounded-full bg-stone-100 px-2 py-0.5">
-                          {listing.town}
-                        </span>
-                      ) : null}
-
-                      {categoryName ? (
-                        <span className="rounded-full bg-stone-100 px-2 py-0.5">
-                          {categoryName}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {listing.service_area ? (
-                      <p className="mt-2 line-clamp-1 text-[11px] font-semibold text-stone-500">
-                        Covers: {listing.service_area}
-                      </p>
-                    ) : null}
-                  </Link>
-                )
-              })}
-            </div>
-          )}
+                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-semibold text-stone-700">
+                  {getCategoryName(listing.categories)}
+                </span>
+              </div>
+            </Link>
+          ))}
         </section>
+
+        {filteredListings.length === 0 && !error ? (
+          <section className="mt-8 rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-stone-200">
+            <h2 className="text-xl font-bold text-stone-900">
+              No listings found
+            </h2>
+
+            <p className="mt-2 text-sm text-stone-600">
+              Try changing your search, category or town filter.
+            </p>
+          </section>
+        ) : null}
       </section>
     </main>
   )
@@ -455,11 +350,9 @@ export default function DirectoryPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
-          <section className="mx-auto max-w-6xl">
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-              Loading directory...
-            </div>
+        <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900">
+          <section className="mx-auto max-w-[1500px]">
+            <p>Loading directory...</p>
           </section>
         </main>
       }

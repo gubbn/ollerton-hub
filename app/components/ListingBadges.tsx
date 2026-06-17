@@ -1,39 +1,51 @@
 type ListingBadgesProps = {
-  listingType: string | null
-  isPremium?: boolean | null
   isFeatured?: boolean | null
-  compact?: boolean
+  isPremium?: boolean | null
+  listingType?: string | null
+  usefulListingType?: string | null
+  className?: string
+}
+
+function isLocalInfoListing(
+  listingType?: string | null,
+  usefulListingType?: string | null
+) {
+  return (
+    listingType === 'community' ||
+    listingType === 'local_info' ||
+    Boolean(usefulListingType)
+  )
 }
 
 export default function ListingBadges({
-  listingType,
-  isPremium,
   isFeatured,
-  compact = false,
+  isPremium,
+  listingType,
+  usefulListingType,
+  className = '',
 }: ListingBadgesProps) {
-  const isBusinessListing = listingType === 'business'
+  const showLocalInfo = isLocalInfoListing(listingType, usefulListingType)
 
-  if (!isBusinessListing) return null
-  if (!isPremium && !isFeatured) return null
-
-  const wrapperClass = compact
-    ? 'mt-2 flex flex-wrap gap-1.5'
-    : 'mt-3 flex flex-wrap gap-2'
-
-  const badgeClass = compact
-    ? 'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold'
-    : 'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold'
+  if (!isFeatured && !isPremium && !showLocalInfo) {
+    return null
+  }
 
   return (
-    <div className={wrapperClass}>
+    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
+      {showLocalInfo ? (
+        <span className="inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold leading-none text-red-800">
+          Local info
+        </span>
+      ) : null}
+
       {isPremium ? (
-        <span className={`${badgeClass} bg-amber-100 text-amber-900 ring-1 ring-amber-300`}>
+        <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold leading-none text-amber-800 ring-1 ring-amber-300">
           Premium
         </span>
       ) : null}
 
       {isFeatured ? (
-        <span className={`${badgeClass} bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300`}>
+        <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold leading-none text-emerald-800 ring-1 ring-emerald-300">
           Featured
         </span>
       ) : null}
