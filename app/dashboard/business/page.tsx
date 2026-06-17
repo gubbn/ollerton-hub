@@ -16,6 +16,7 @@ type Business = {
   slug: string
   category_id: string | null
   listing_type: string | null
+  status: string | null
   description: string | null
   services: string | null
   phone: string | null
@@ -161,6 +162,8 @@ export default function BusinessDashboardPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
 
   const [business, setBusiness] = useState<Business | null>(null)
+  const [ownedBusinesses, setOwnedBusinesses] = useState<Business[]>([])
+  const [selectedBusinessId, setSelectedBusinessId] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
   const [form, setForm] = useState<FormState>(emptyForm)
 
@@ -188,6 +191,7 @@ export default function BusinessDashboardPage() {
 
   function loadBusinessIntoForm(loadedBusiness: Business) {
     setBusiness(loadedBusiness)
+    setSelectedBusinessId(loadedBusiness.id)
 
     setForm({
       business_name: loadedBusiness.business_name ?? '',
@@ -258,6 +262,7 @@ export default function BusinessDashboardPage() {
         slug,
         category_id,
         listing_type,
+        status,
         description,
         services,
         phone,
@@ -282,16 +287,20 @@ export default function BusinessDashboardPage() {
       )
       .eq('owner_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(2)
 
     if (businessError) {
-      setError(`Could not load your business listing: ${businessError.message}`)
+      setError(`Could not load your business listings: ${businessError.message}`)
       setLoading(false)
       return
     }
 
-    if (!businessRows || businessRows.length === 0) {
+    const rows = (businessRows as Business[] | null) ?? []
+
+    setOwnedBusinesses(rows)
+
+    if (rows.length === 0) {
       setBusiness(null)
+      setSelectedBusinessId('')
       setForm(emptyForm)
       setNotice(
         'No existing business listing was found for this signed-in account. You can create one below.'
@@ -300,14 +309,32 @@ export default function BusinessDashboardPage() {
       return
     }
 
-    if (businessRows.length > 1) {
+    loadBusinessIntoForm(rows[0])
+
+    if (rows.length > 1) {
       setNotice(
-        'More than one business listing is assigned to this account. The newest listing has been loaded.'
+        'More than one business listing is assigned to this account. Use the dropdown below to choose which listing to edit.'
       )
     }
 
-    loadBusinessIntoForm(businessRows[0] as Business)
     setLoading(false)
+  }
+
+  function changeSelectedBusiness(event: ChangeEvent<HTMLSelectElement>) {
+    const businessId = event.target.value
+    const selectedBusiness = ownedBusinesses.find((item) => item.id === businessId)
+
+    setError('')
+    setSuccess('')
+    setNotice('')
+
+    if (!selectedBusiness) {
+      setSelectedBusinessId(businessId)
+      setError('Could not find the selected business listing.')
+      return
+    }
+
+    loadBusinessIntoForm(selectedBusiness)
   }
 
   function updateField(
@@ -493,6 +520,7 @@ export default function BusinessDashboardPage() {
         .from('businesses')
         .update(payload)
         .eq('id', business.id)
+        .eq('owner_id', user.id)
         .select(
           `
           id,
@@ -500,6 +528,7 @@ export default function BusinessDashboardPage() {
           slug,
           category_id,
           listing_type,
+          status,
           description,
           services,
           phone,
@@ -530,7 +559,13 @@ export default function BusinessDashboardPage() {
         return
       }
 
-      loadBusinessIntoForm(updatedBusiness as Business)
+      const updated = updatedBusiness as Business
+
+      setOwnedBusinesses((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item))
+      )
+
+      loadBusinessIntoForm(updated)
       setSuccess('Business listing saved. Changes are now awaiting approval.')
       setSaving(false)
       return
@@ -551,6 +586,7 @@ export default function BusinessDashboardPage() {
         slug,
         category_id,
         listing_type,
+        status,
         description,
         services,
         phone,
@@ -581,7 +617,11 @@ export default function BusinessDashboardPage() {
       return
     }
 
-    loadBusinessIntoForm(insertedBusiness as Business)
+    const inserted = insertedBusiness as Business
+
+    setOwnedBusinesses((current) => [inserted, ...current])
+    loadBusinessIntoForm(inserted)
+
     setSuccess('Business listing created. It is now awaiting approval.')
     setSaving(false)
   }
@@ -630,18 +670,35 @@ export default function BusinessDashboardPage() {
                 </span>
               )}
 
-              {business?.is_approved ? (
-                <span className="rounded-xl bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
-                  Approved
-                </span>
-              ) : (
-                <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
-                  Awaiting approval
-                </span>
-              )}
+              <StatusBadge business={business} />
             </div>
           </div>
         </section>
+
+        {ownedBusinesses.length > 1 && (
+          <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
+            <label className="block text-sm font-semibold uppercase tracking-wide text-red-700">
+              Choose listing to edit
+            </label>
+
+            <select
+              value={selectedBusinessId}
+              onChange={changeSelectedBusiness}
+              className="mt-3 w-full rounded-xl border border-stone-300 bg-white px-3 py-3 text-sm font-medium text-stone-900 outline-none focus:border-red-600 focus:ring-2 focus:ring-red-100"
+            >
+              {ownedBusinesses.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.business_name || 'Unnamed listing'}
+                </option>
+              ))}
+            </select>
+
+            <p className="mt-2 text-sm text-stone-600">
+              Select the business you want to update. The status badge above
+              shows the approval status for the selected listing.
+            </p>
+          </section>
+        )}
 
         {isBusinessListing && (
           <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
@@ -835,23 +892,13 @@ export default function BusinessDashboardPage() {
 
           {isBusinessListing && (
             <section className="rounded-2xl bg-stone-50 p-5 ring-1 ring-stone-200">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-stone-950">
-                    Reviews
-                  </h2>
+              <h2 className="text-lg font-bold text-stone-950">Reviews</h2>
 
-                  <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
-                    You can collect reviews directly through Ollerton Hub, or send
-                    visitors to an existing review page such as Google,
-                    Trustpilot or Facebook.
-                  </p>
-                </div>
-
-                <span className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-stone-700 ring-1 ring-stone-200">
-                  Business only
-                </span>
-              </div>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
+                You can collect reviews directly through Ollerton Hub, or send
+                visitors to an existing review page such as Google, Trustpilot or
+                Facebook.
+              </p>
 
               <label className="mt-5 flex items-start gap-3">
                 <input
@@ -987,9 +1034,7 @@ export default function BusinessDashboardPage() {
             />
 
             {uploadingLogo && (
-              <p className="mt-3 text-sm text-stone-600">
-                Uploading logo...
-              </p>
+              <p className="mt-3 text-sm text-stone-600">Uploading logo...</p>
             )}
 
             {form.logo_url && (
@@ -1105,9 +1150,7 @@ function LimitCard({
   return (
     <div
       className={`rounded-2xl p-4 ring-1 ${
-        overLimit
-          ? 'bg-red-50 ring-red-200'
-          : 'bg-stone-50 ring-stone-200'
+        overLimit ? 'bg-red-50 ring-red-200' : 'bg-stone-50 ring-stone-200'
       }`}
     >
       <p className="text-sm font-semibold text-stone-900">{title}</p>
@@ -1120,5 +1163,39 @@ function LimitCard({
         {used} of {limit} words used
       </p>
     </div>
+  )
+}
+
+function StatusBadge({ business }: { business: Business | null }) {
+  if (!business) {
+    return (
+      <span className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-800">
+        New listing
+      </span>
+    )
+  }
+
+  const status = business.status?.toLowerCase()
+
+  if (status === 'approved' || business.is_approved) {
+    return (
+      <span className="rounded-xl bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
+        Approved
+      </span>
+    )
+  }
+
+  if (status === 'rejected') {
+    return (
+      <span className="rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-800">
+        Rejected
+      </span>
+    )
+  }
+
+  return (
+    <span className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+      Awaiting approval
+    </span>
   )
 }
