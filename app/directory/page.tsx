@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import ListingBadges from '@/app/components/ListingBadges'
 
 type Category = {
   id: string
@@ -73,10 +74,12 @@ function getListingLabel(listing: Listing) {
     return listing.useful_listing_type || 'Local information'
   }
 
-  if (listing.is_premium) return 'Premium listing'
-  if (listing.is_featured) return 'Featured listing'
-
   return getCategoryName(listing.categories)
+}
+
+function getBadgeListingType(listing: Listing) {
+  if (isCommunityListing(listing)) return 'community'
+  return listing.listing_type ?? 'business'
 }
 
 function DirectoryContent() {
@@ -205,17 +208,17 @@ function DirectoryContent() {
         const aIsCommunity = isCommunityListing(a)
         const bIsCommunity = isCommunityListing(b)
 
-        const aFeatured = a.is_featured === true && !aIsCommunity
-        const bFeatured = b.is_featured === true && !bIsCommunity
-
         const aPremium = a.is_premium === true && !aIsCommunity
         const bPremium = b.is_premium === true && !bIsCommunity
 
-        if (aFeatured && !bFeatured) return -1
-        if (!aFeatured && bFeatured) return 1
+        const aFeatured = a.is_featured === true && !aIsCommunity
+        const bFeatured = b.is_featured === true && !bIsCommunity
 
         if (aPremium && !bPremium) return -1
         if (!aPremium && bPremium) return 1
+
+        if (aFeatured && !bFeatured) return -1
+        if (!aFeatured && bFeatured) return 1
 
         return a.business_name.localeCompare(b.business_name)
       })
@@ -357,7 +360,7 @@ function DirectoryContent() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredListings.map((listing) => {
                 const categoryName = getCategoryName(listing.categories)
                 const isCommunity = isCommunityListing(listing)
@@ -366,79 +369,74 @@ function DirectoryContent() {
                   <Link
                     key={listing.id}
                     href={`/business/${listing.slug}`}
-                    className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-200 transition hover:-translate-y-1 hover:shadow-md"
+                    className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-stone-200 transition hover:-translate-y-0.5 hover:shadow-md"
                   >
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-stone-200 text-lg font-bold text-stone-700">
-                        {listing.logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={listing.logo_url}
-                            alt={`${listing.business_name} logo`}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          listing.business_name.charAt(0)
-                        )}
-                      </div>
+                    <div className="flex items-start gap-3">
+  {listing.logo_url ? (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-stone-200 text-sm font-bold text-stone-700">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={listing.logo_url}
+        alt={`${listing.business_name} logo`}
+        className="h-full w-full object-cover"
+      />
+    </div>
+  ) : null}
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="line-clamp-2 text-lg font-bold text-stone-950">
+  <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start gap-1.5">
+                          <h2 className="line-clamp-2 text-sm font-bold leading-5 text-stone-950">
                             {listing.business_name}
                           </h2>
 
-                          {listing.is_featured && !isCommunity ? (
-                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
-                              Featured
-                            </span>
-                          ) : null}
-
-                          {listing.is_premium && !isCommunity ? (
-                            <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">
-                              Premium
-                            </span>
-                          ) : null}
-
                           {isCommunity ? (
-                            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800">
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-800">
                               Local info
                             </span>
                           ) : null}
                         </div>
 
-                        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-red-700">
+                        <p className="mt-1 line-clamp-1 text-[11px] font-bold uppercase tracking-wide text-red-700">
                           {getListingLabel(listing)}
                         </p>
 
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-stone-600">
-                          {listing.town ? (
-                            <span className="rounded-full bg-stone-100 px-3 py-1">
-                              {listing.town}
-                            </span>
-                          ) : null}
-
-                          {categoryName ? (
-                            <span className="rounded-full bg-stone-100 px-3 py-1">
-                              {categoryName}
-                            </span>
-                          ) : null}
-                        </div>
+                        {!isCommunity ? (
+                          <ListingBadges
+                            listingType={getBadgeListingType(listing)}
+                            isPremium={listing.is_premium}
+                            isFeatured={listing.is_featured}
+                            compact
+                          />
+                        ) : null}
                       </div>
                     </div>
 
                     {listing.description ? (
-                      <p className="mt-4 line-clamp-3 text-sm leading-6 text-stone-700">
+                      <p className="mt-3 line-clamp-2 text-xs leading-5 text-stone-700">
                         {listing.description}
                       </p>
                     ) : (
-                      <p className="mt-4 text-sm leading-6 text-stone-700">
+                      <p className="mt-3 text-xs leading-5 text-stone-700">
                         View this local listing.
                       </p>
                     )}
 
+                    <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold text-stone-600">
+                      {listing.town ? (
+                        <span className="rounded-full bg-stone-100 px-2 py-0.5">
+                          {listing.town}
+                        </span>
+                      ) : null}
+
+                      {categoryName ? (
+                        <span className="rounded-full bg-stone-100 px-2 py-0.5">
+                          {categoryName}
+                        </span>
+                      ) : null}
+                    </div>
+
                     {listing.service_area ? (
-                      <p className="mt-3 text-xs font-semibold text-stone-500">
+                      <p className="mt-2 line-clamp-1 text-[11px] font-semibold text-stone-500">
                         Covers: {listing.service_area}
                       </p>
                     ) : null}
