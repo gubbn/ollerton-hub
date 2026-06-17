@@ -31,6 +31,9 @@ type Business = {
   is_premium: boolean | null
   listing_type: string | null
   useful_listing_type: string | null
+  use_external_reviews: boolean | null
+  external_review_platform: string | null
+  external_review_url: string | null
   categories: CategoryRelation
 }
 
@@ -102,6 +105,9 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
       is_premium,
       listing_type,
       useful_listing_type,
+      use_external_reviews,
+      external_review_platform,
+      external_review_url,
       categories (
         name
       )
@@ -115,6 +121,21 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
   const business = businessData as Business
   const isCommunity = isCommunityListing(business)
+
+  const hasExternalReviewLink =
+    !isCommunity &&
+    Boolean(business.use_external_reviews) &&
+    Boolean(business.external_review_url)
+
+  const externalReviewUrl = business.external_review_url
+    ? cleanWebsiteUrl(business.external_review_url)
+    : ''
+
+  const reviewButtonLabel = hasExternalReviewLink
+    ? business.external_review_platform
+      ? `Leave a review on ${business.external_review_platform}`
+      : 'Leave a review'
+    : 'Leave a review'
 
   let reviews: Review[] = []
 
@@ -184,15 +205,15 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                     </span>
                   ) : null}
 
-                  {business.is_featured && !isCommunity ? (
-                    <span className="inline-block rounded-full bg-red-600 px-3 py-1 text-sm font-semibold text-white">
-                      Featured listing
-                    </span>
-                  ) : null}
-
                   {business.is_premium && !isCommunity ? (
                     <span className="inline-block rounded-full bg-white px-3 py-1 text-sm font-semibold text-stone-900">
                       Premium listing
+                    </span>
+                  ) : null}
+
+                  {business.is_featured && !isCommunity ? (
+                    <span className="inline-block rounded-full bg-red-600 px-3 py-1 text-sm font-semibold text-white">
+                      Featured listing
                     </span>
                   ) : null}
                 </div>
@@ -239,15 +260,38 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
             {!isCommunity ? (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
-                <div className="flex items-center justify-between gap-4">
-                  <h2 className="text-xl font-bold">Reviews</h2>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold">Reviews</h2>
 
-                  <Link
-                    href={`/business/${slug}/review`}
-                    className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
-                  >
-                    Leave a review
-                  </Link>
+                    {hasExternalReviewLink ? (
+                      <p className="mt-1 text-sm text-stone-600">
+                        This business collects reviews externally
+                        {business.external_review_platform
+                          ? ` through ${business.external_review_platform}`
+                          : ''}
+                        .
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {hasExternalReviewLink ? (
+                    <a
+                      href={externalReviewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                    >
+                      {reviewButtonLabel}
+                    </a>
+                  ) : (
+                    <Link
+                      href={`/business/${slug}/review`}
+                      className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                    >
+                      {reviewButtonLabel}
+                    </Link>
+                  )}
                 </div>
 
                 <div className="mt-5 space-y-4">
@@ -268,6 +312,11 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                         </p>
                       </div>
                     ))
+                  ) : hasExternalReviewLink ? (
+                    <p className="text-stone-600">
+                      Reviews for this business are collected externally. Use the
+                      button above to leave a review.
+                    </p>
                   ) : (
                     <p className="text-stone-600">
                       No approved reviews yet. Be the first to leave one.
