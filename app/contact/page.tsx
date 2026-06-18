@@ -112,6 +112,7 @@ function ContactContent() {
 
   const initialTopic = getTopicOption(searchParams.get('topic'))
   const listingSlug = searchParams.get('listing') || ''
+  const listingId = searchParams.get('listingId') || ''
   const listingName = searchParams.get('listingName') || ''
 
   const [topic, setTopic] = useState<ContactTopic>(initialTopic.value)
@@ -134,6 +135,7 @@ function ContactContent() {
     setError('')
     setSuccess(false)
 
+    // Honeypot spam check.
     if (company.trim()) {
       setSuccess(true)
       return
@@ -146,19 +148,27 @@ function ContactContent() {
 
     setSubmitting(true)
 
+    const sourceUrl =
+      typeof window !== 'undefined' ? window.location.href : null
+
+    const messageWithListingName = businessName.trim()
+      ? `Business / listing name: ${businessName.trim()}\n\n${message.trim()}`
+      : message.trim()
+
     const { error: insertError } = await supabase
-      .from('contact_messages')
+      .from('contact_requests')
       .insert({
-        topic,
-        title: selectedTopic.title,
+        request_type: topic,
+        subject: selectedTopic.title,
         name: name.trim(),
         email: email.trim(),
         phone: cleanValue(phone),
-        business_name: cleanValue(businessName),
+        message: messageWithListingName,
+        listing_id: cleanValue(listingId),
         listing_slug: cleanValue(listingSlug),
-        listing_name: cleanValue(listingName),
-        message: message.trim(),
         status: 'new',
+        admin_notes: null,
+        source_url: sourceUrl,
       })
 
     setSubmitting(false)
@@ -179,7 +189,10 @@ function ContactContent() {
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900">
       <section className="mx-auto max-w-4xl">
-        <Link href="/" className="text-sm font-medium text-stone-600 hover:underline">
+        <Link
+          href="/"
+          className="text-sm font-medium text-stone-600 hover:underline"
+        >
           ← Back to Ollerton Hub
         </Link>
 
@@ -207,7 +220,8 @@ function ContactContent() {
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-green-800">
-                Thanks for contacting Ollerton Hub. Your message has been received.
+                Thanks for contacting Ollerton Hub. Your message has been
+                received.
               </p>
 
               <div className="mt-5 flex flex-wrap gap-3">
@@ -236,8 +250,10 @@ function ContactContent() {
 
                 <select
                   value={topic}
-                  onChange={(event) => setTopic(event.target.value as ContactTopic)}
-                  className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                  onChange={(event) =>
+                    setTopic(event.target.value as ContactTopic)
+                  }
+                  className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm text-stone-900 outline-none focus:border-red-600"
                 >
                   {topicOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -256,7 +272,7 @@ function ContactContent() {
                   <input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900 outline-none focus:border-red-600"
                     placeholder="Your name"
                   />
                 </div>
@@ -270,7 +286,7 @@ function ContactContent() {
                     type="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900 outline-none focus:border-red-600"
                     placeholder="you@example.com"
                   />
                 </div>
@@ -285,7 +301,7 @@ function ContactContent() {
                   <input
                     value={phone}
                     onChange={(event) => setPhone(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900 outline-none focus:border-red-600"
                     placeholder="Optional"
                   />
                 </div>
@@ -298,7 +314,7 @@ function ContactContent() {
                   <input
                     value={businessName}
                     onChange={(event) => setBusinessName(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900 outline-none focus:border-red-600"
                     placeholder="Optional"
                   />
                 </div>
@@ -329,7 +345,7 @@ function ContactContent() {
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
                   rows={7}
-                  className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900"
+                  className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm text-stone-900 outline-none focus:border-red-600"
                   placeholder={selectedTopic.messagePlaceholder}
                 />
               </div>
@@ -347,7 +363,7 @@ function ContactContent() {
               </div>
 
               {error ? (
-                <p className="rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-200">
+                <p className="rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700 ring-1 ring-red-200">
                   {error}
                 </p>
               ) : null}

@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
+type ContactRequestStatus = 'new' | 'read' | 'actioned' | 'closed'
+
 type ContactRequest = {
   id: string
   request_type: string | null
@@ -15,7 +17,7 @@ type ContactRequest = {
   message: string
   listing_id: string | null
   listing_slug: string | null
-  status: 'new' | 'read' | 'actioned' | 'closed'
+  status: ContactRequestStatus
   admin_notes: string | null
   source_url: string | null
   created_at: string
@@ -31,27 +33,40 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
-function statusLabel(status: ContactRequest['status']) {
+function statusLabel(status: ContactRequestStatus) {
   if (status === 'new') return 'New'
   if (status === 'read') return 'Read'
   if (status === 'actioned') return 'Actioned'
   return 'Closed'
 }
 
-function statusClasses(status: ContactRequest['status']) {
+function statusClasses(status: ContactRequestStatus) {
   if (status === 'new') {
-    return 'bg-amber-100 text-amber-900 border-amber-200'
+    return 'border-amber-200 bg-amber-100 text-amber-900'
   }
 
   if (status === 'read') {
-    return 'bg-sky-100 text-sky-900 border-sky-200'
+    return 'border-sky-200 bg-sky-100 text-sky-900'
   }
 
   if (status === 'actioned') {
-    return 'bg-emerald-100 text-emerald-900 border-emerald-200'
+    return 'border-emerald-200 bg-emerald-100 text-emerald-900'
   }
 
-  return 'bg-stone-200 text-stone-800 border-stone-300'
+  return 'border-stone-300 bg-stone-200 text-stone-800'
+}
+
+function normaliseRequestStatus(value: string | null): ContactRequestStatus {
+  if (
+    value === 'new' ||
+    value === 'read' ||
+    value === 'actioned' ||
+    value === 'closed'
+  ) {
+    return value
+  }
+
+  return 'new'
 }
 
 export default function AdminContactRequestsPage() {
@@ -67,9 +82,11 @@ export default function AdminContactRequestsPage() {
     useState<ContactRequest | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [adminNotes, setAdminNotes] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
     checkAdminAndLoad()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -80,10 +97,18 @@ export default function AdminContactRequestsPage() {
 
   async function checkAdminAndLoad() {
     setLoading(true)
+    setErrorMessage('')
 
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser()
+
+    if (userError) {
+      setErrorMessage(userError.message)
+      setLoading(false)
+      return
+    }
 
     if (!user) {
       router.push('/login')
@@ -108,25 +133,44 @@ export default function AdminContactRequestsPage() {
   }
 
   async function loadRequests() {
+    setErrorMessage('')
+
     const { data, error } = await supabase
       .from('contact_requests')
-      .select('*')
+      .select(
+        'id, request_type, subject, name, email, phone, message, listing_id, listing_slug, status, admin_notes, source_url, created_at, updated_at'
+      )
       .order('created_at', { ascending: false })
 
     if (error) {
       console.error(error)
+      setErrorMessage(error.message)
       setRequests([])
       return
     }
 
-    setRequests((data ?? []) as ContactRequest[])
+    const cleanData = (data ?? []).map((item) => ({
+      ...item,
+      status: normaliseRequestStatus(item.status),
+    })) as ContactRequest[]
+
+    setRequests(cleanData)
+
+    if (selectedRequest) {
+      const refreshedSelectedRequest = cleanData.find(
+        (request) => request.id === selectedRequest.id
+      )
+
+      setSelectedRequest(refreshedSelectedRequest ?? null)
+    }
   }
 
   async function updateRequestStatus(
     request: ContactRequest,
-    status: ContactRequest['status']
+    status: ContactRequestStatus
   ) {
     setSavingId(request.id)
+    setErrorMessage('')
 
     const { error } = await supabase
       .from('contact_requests')
@@ -135,6 +179,7 @@ export default function AdminContactRequestsPage() {
 
     if (error) {
       console.error(error)
+      setErrorMessage(error.message)
       setSavingId(null)
       return
     }
@@ -152,18 +197,28 @@ export default function AdminContactRequestsPage() {
     setSavingId(null)
   }
 
+  async function selectRequest(request: ContactRequest) {
+    setSelectedRequest(request)
+
+    if (request.status === 'new') {
+      await updateRequestStatus(request, 'read')
+    }
+  }
+
   async function saveAdminNotes() {
     if (!selectedRequest) return
 
     setSavingId(selectedRequest.id)
+    setErrorMessage('')
 
     const { error } = await supabase
       .from('contact_requests')
-      .update({ admin_notes: adminNotes })
+      .update({ admin_notes: adminNotes.trim() || null })
       .eq('id', selectedRequest.id)
 
     if (error) {
       console.error(error)
+      setErrorMessage(error.message)
       setSavingId(null)
       return
     }
@@ -171,14 +226,14 @@ export default function AdminContactRequestsPage() {
     setRequests((current) =>
       current.map((item) =>
         item.id === selectedRequest.id
-          ? { ...item, admin_notes: adminNotes }
+          ? { ...item, admin_notes: adminNotes.trim() || null }
           : item
       )
     )
 
     setSelectedRequest({
       ...selectedRequest,
-      admin_notes: adminNotes,
+      admin_notes: adminNotes.trim() || null,
     })
 
     setSavingId(null)
@@ -192,6 +247,7 @@ export default function AdminContactRequestsPage() {
     if (!confirmed) return
 
     setSavingId(request.id)
+    setErrorMessage('')
 
     const { error } = await supabase
       .from('contact_requests')
@@ -200,6 +256,7 @@ export default function AdminContactRequestsPage() {
 
     if (error) {
       console.error(error)
+      setErrorMessage(error.message)
       setSavingId(null)
       return
     }
@@ -214,20 +271,27 @@ export default function AdminContactRequestsPage() {
   }
 
   const filteredRequests = useMemo(() => {
+    const term = search.trim().toLowerCase()
+
     return requests.filter((request) => {
       const matchesStatus =
         statusFilter === 'all' || request.status === statusFilter
 
-      const term = search.trim().toLowerCase()
+      const searchText = [
+        request.name,
+        request.email,
+        request.phone,
+        request.subject,
+        request.message,
+        request.request_type,
+        request.listing_slug,
+        request.source_url,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
 
-      const matchesSearch =
-        !term ||
-        request.name.toLowerCase().includes(term) ||
-        request.email.toLowerCase().includes(term) ||
-        request.subject.toLowerCase().includes(term) ||
-        request.message.toLowerCase().includes(term) ||
-        request.request_type?.toLowerCase().includes(term) ||
-        request.listing_slug?.toLowerCase().includes(term)
+      const matchesSearch = !term || searchText.includes(term)
 
       return matchesStatus && matchesSearch
     })
@@ -284,12 +348,14 @@ export default function AdminContactRequestsPage() {
             >
               ← Back to admin
             </Link>
+
             <h1 className="mt-3 text-3xl font-bold tracking-tight">
               Contact requests
             </h1>
+
             <p className="mt-2 max-w-2xl text-stone-700">
               View enquiries from the contact form, including subscriptions,
-              advert enquiries, reports and general messages.
+              advert enquiries, listing reports and general messages.
             </p>
           </div>
 
@@ -300,6 +366,12 @@ export default function AdminContactRequestsPage() {
             Refresh
           </button>
         </div>
+
+        {errorMessage ? (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">
+            {errorMessage}
+          </div>
+        ) : null}
 
         <section className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {statusOptions.map((status) => (
@@ -312,7 +384,9 @@ export default function AdminContactRequestsPage() {
                   : 'border-stone-200 bg-white text-stone-900 hover:bg-stone-50'
               }`}
             >
-              <p className="text-sm font-semibold capitalize">{status}</p>
+              <p className="text-sm font-semibold capitalize">
+                {status === 'all' ? 'All' : statusLabel(status)}
+              </p>
               <p className="mt-1 text-2xl font-bold">{counts[status]}</p>
             </button>
           ))}
@@ -325,7 +399,7 @@ export default function AdminContactRequestsPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by name, email, subject, message or listing slug..."
+            placeholder="Search by name, email, subject, message, request type or listing slug..."
             className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-stone-900"
           />
         </section>
@@ -347,7 +421,7 @@ export default function AdminContactRequestsPage() {
                   }`}
                 >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={`rounded-full border px-3 py-1 text-xs font-bold ${statusClasses(
@@ -357,17 +431,17 @@ export default function AdminContactRequestsPage() {
                           {statusLabel(request.status)}
                         </span>
 
-                        {request.request_type && (
+                        {request.request_type ? (
                           <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
                             {request.request_type}
                           </span>
-                        )}
+                        ) : null}
 
-                        {request.listing_slug && (
+                        {request.listing_slug ? (
                           <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-800">
                             Listing: {request.listing_slug}
                           </span>
-                        )}
+                        ) : null}
                       </div>
 
                       <h2 className="mt-3 text-xl font-bold">
@@ -385,13 +459,13 @@ export default function AdminContactRequestsPage() {
 
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <button
-                        onClick={() => setSelectedRequest(request)}
+                        onClick={() => selectRequest(request)}
                         className="rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
                       >
                         View
                       </button>
 
-                      {request.status === 'new' && (
+                      {request.status === 'new' ? (
                         <button
                           onClick={() => updateRequestStatus(request, 'read')}
                           disabled={savingId === request.id}
@@ -399,19 +473,30 @@ export default function AdminContactRequestsPage() {
                         >
                           Mark read
                         </button>
-                      )}
+                      ) : null}
 
-                      {request.status !== 'closed' && (
+                      {request.status !== 'actioned' &&
+                      request.status !== 'closed' ? (
                         <button
                           onClick={() =>
-                            updateRequestStatus(request, 'closed')
+                            updateRequestStatus(request, 'actioned')
                           }
+                          disabled={savingId === request.id}
+                          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+                        >
+                          Actioned
+                        </button>
+                      ) : null}
+
+                      {request.status !== 'closed' ? (
+                        <button
+                          onClick={() => updateRequestStatus(request, 'closed')}
                           disabled={savingId === request.id}
                           className="rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-50 disabled:opacity-50"
                         >
                           Close
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </article>
@@ -439,9 +524,11 @@ export default function AdminContactRequestsPage() {
                     >
                       {statusLabel(selectedRequest.status)}
                     </span>
+
                     <h2 className="mt-3 text-xl font-bold">
                       {selectedRequest.subject}
                     </h2>
+
                     <p className="mt-1 text-sm text-stone-600">
                       {formatDate(selectedRequest.created_at)}
                     </p>
@@ -464,14 +551,16 @@ export default function AdminContactRequestsPage() {
                   <div>
                     <p className="font-semibold text-stone-500">Email</p>
                     <a
-                      href={`mailto:${selectedRequest.email}`}
+                      href={`mailto:${selectedRequest.email}?subject=Re: ${encodeURIComponent(
+                        selectedRequest.subject
+                      )}`}
                       className="font-semibold text-red-700 hover:text-red-900"
                     >
                       {selectedRequest.email}
                     </a>
                   </div>
 
-                  {selectedRequest.phone && (
+                  {selectedRequest.phone ? (
                     <div>
                       <p className="font-semibold text-stone-500">Phone</p>
                       <a
@@ -481,9 +570,9 @@ export default function AdminContactRequestsPage() {
                         {selectedRequest.phone}
                       </a>
                     </div>
-                  )}
+                  ) : null}
 
-                  {selectedRequest.request_type && (
+                  {selectedRequest.request_type ? (
                     <div>
                       <p className="font-semibold text-stone-500">
                         Request type
@@ -492,9 +581,9 @@ export default function AdminContactRequestsPage() {
                         {selectedRequest.request_type}
                       </p>
                     </div>
-                  )}
+                  ) : null}
 
-                  {selectedRequest.listing_slug && (
+                  {selectedRequest.listing_slug ? (
                     <div>
                       <p className="font-semibold text-stone-500">
                         Related listing
@@ -506,9 +595,9 @@ export default function AdminContactRequestsPage() {
                         View listing
                       </Link>
                     </div>
-                  )}
+                  ) : null}
 
-                  {selectedRequest.source_url && (
+                  {selectedRequest.source_url ? (
                     <div>
                       <p className="font-semibold text-stone-500">
                         Source URL
@@ -517,7 +606,7 @@ export default function AdminContactRequestsPage() {
                         {selectedRequest.source_url}
                       </p>
                     </div>
-                  )}
+                  ) : null}
 
                   <div>
                     <p className="font-semibold text-stone-500">Message</p>
@@ -531,6 +620,7 @@ export default function AdminContactRequestsPage() {
                   <label className="text-sm font-semibold text-stone-700">
                     Admin notes
                   </label>
+
                   <textarea
                     value={adminNotes}
                     onChange={(event) => setAdminNotes(event.target.value)}
@@ -538,12 +628,13 @@ export default function AdminContactRequestsPage() {
                     className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-stone-900"
                     placeholder="Add internal notes here..."
                   />
+
                   <button
                     onClick={saveAdminNotes}
                     disabled={savingId === selectedRequest.id}
                     className="mt-3 rounded-xl bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                   >
-                    Save notes
+                    {savingId === selectedRequest.id ? 'Saving...' : 'Save notes'}
                   </button>
                 </div>
 
