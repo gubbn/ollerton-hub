@@ -222,7 +222,7 @@ export default async function HomePage() {
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/directory"
+                  href="/register"
                   className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
                 >
                   Browse directory
