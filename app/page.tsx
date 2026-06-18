@@ -229,7 +229,7 @@ export default async function HomePage() {
                 </Link>
 
                 <Link
-                  href="/dashboard/business"
+                  href="/register"
                   className="rounded-xl bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/20"
                 >
                   Add your listing
