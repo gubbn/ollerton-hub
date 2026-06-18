@@ -222,14 +222,14 @@ export default async function HomePage() {
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/register"
+                  href="/directory"
                   className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
                 >
                   Browse directory
                 </Link>
 
                 <Link
-                  href="/dashboard/business"
+                  href="/register""
                   className="rounded-xl bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/20"
                 >
                   Add your listing
