@@ -34,21 +34,21 @@ const topicOptions: TopicOption[] = [
   },
   {
     value: 'subscriptions',
-    label: 'Subscriptions',
-    title: 'Subscriptions enquiry',
+    label: 'Listing options',
+    title: 'Listing options enquiry',
     intro:
-      'Ask about listing options, upgrades, featured placements or ongoing subscription details.',
+      'Ask about Free, Featured or Premium listings on Ollerton Hub.',
     messagePlaceholder:
-      'Tell us what you would like to know about subscriptions or listing options.',
+      'Tell us what you would like to know about listing options.',
   },
   {
     value: 'advert-enquiry',
     label: 'Advert enquiry',
     title: 'Advert enquiry',
     intro:
-      'Ask about local advert space, homepage placements, sponsor messages or promotional options.',
+      'Ask about advert space for local offers, events, sponsor messages or announcements.',
     messagePlaceholder:
-      'Tell us what you would like to promote and roughly when you would like it to appear.',
+      'Tell us what you would like to advertise and roughly when you would like it to appear.',
   },
   {
     value: 'report-listing',
@@ -64,7 +64,7 @@ const topicOptions: TopicOption[] = [
     label: 'Featured listing',
     title: 'Featured listing enquiry',
     intro:
-      'Ask about making your listing stand out in the directory and on Ollerton Hub pages.',
+      'Ask about giving your listing extra visibility on Ollerton Hub.',
     messagePlaceholder:
       'Tell us which listing you would like to feature and what you would like to achieve.',
   },
@@ -73,7 +73,7 @@ const topicOptions: TopicOption[] = [
     label: 'Premium listing',
     title: 'Premium listing enquiry',
     intro:
-      'Ask about Premium listing features, stats, visibility and promotional options.',
+      'Ask about the highest visibility listing option on Ollerton Hub.',
     messagePlaceholder:
       'Tell us about your business and what you would like from a Premium listing.',
   },

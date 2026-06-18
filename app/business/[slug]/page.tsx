@@ -28,7 +28,7 @@ type Business = {
   service_area: string | null
   opening_times: string | null
   logo_url: string | null
-  is_featured: boolean
+  is_featured: boolean | null
   is_premium: boolean | null
   listing_type: string | null
   useful_listing_type: string | null
@@ -60,9 +60,6 @@ function getListingTypeLabel(business: Business) {
     return business.useful_listing_type || 'Useful local information'
   }
 
-  if (business.is_premium) return 'Premium business'
-  if (business.is_featured) return 'Featured business'
-
   return getCategoryName(business.categories)
 }
 
@@ -76,6 +73,20 @@ function cleanPhoneNumber(phone: string) {
 
 function displayWebsiteUrl(url: string) {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+}
+
+function buildContactUrl(
+  topic: 'report-listing' | 'local-info',
+  business: Business
+) {
+  const params = new URLSearchParams({
+    topic,
+    listing: business.slug,
+    listingId: business.id,
+    listingName: business.business_name,
+  })
+
+  return `/contact?${params.toString()}`
 }
 
 export default async function BusinessPage({ params }: BusinessPageProps) {
@@ -123,6 +134,9 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
   const business = businessData as Business
   const isCommunity = isCommunityListing(business)
 
+  const reportListingUrl = buildContactUrl('report-listing', business)
+  const suggestUpdateUrl = buildContactUrl('local-info', business)
+
   const hasExternalReviewLink =
     !isCommunity &&
     Boolean(business.use_external_reviews) &&
@@ -169,7 +183,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
             ← Back to directory
           </Link>
 
-          <div className="mt-8 rounded-3xl bg-white/10 p-6">
+          <div className="mt-8 rounded-3xl bg-white/10 p-6 ring-1 ring-white/10">
             <p className="text-sm font-semibold uppercase tracking-wide text-red-300">
               {getListingTypeLabel(business)}
             </p>
@@ -180,7 +194,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 <img
                   src={business.logo_url}
                   alt={`${business.business_name} logo`}
-                  className="h-20 w-20 rounded-3xl bg-white object-cover ring-1 ring-white/20"
+                  className="h-20 w-20 rounded-3xl bg-white object-contain p-2 ring-1 ring-white/20"
                 />
               ) : (
                 <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/10 text-3xl font-bold text-white ring-1 ring-white/20">
@@ -188,24 +202,26 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 </div>
               )}
 
-              <div>
-                <h1 className="text-4xl font-bold">
+              <div className="min-w-0">
+                <h1 className="text-4xl font-bold tracking-tight">
                   {business.business_name}
                 </h1>
 
-               {isCommunity ? (
-  <div className="mt-3 flex flex-wrap gap-2">
-    <span className="inline-block rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">
-      Local amenity
-    </span>
-  </div>
-) : (
-  <ListingBadges
-    listingType={business.listing_type}
-    isPremium={business.is_premium}
-    isFeatured={business.is_featured}
-  />
-)}
+                <div className="mt-3">
+                  <ListingBadges
+                    listingType={business.listing_type}
+                    usefulListingType={business.useful_listing_type}
+                    isPremium={business.is_premium}
+                    isFeatured={business.is_featured}
+                    className="mt-2"
+                  />
+                </div>
+
+                {isCommunity ? (
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-200">
+                    Useful local information listed on Ollerton Hub.
+                  </p>
+                ) : null}
 
                 {averageRating !== null && !isCommunity ? (
                   <p className="mt-3 text-stone-100">
@@ -481,7 +497,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
                 <div className="mt-8 border-t pt-4">
                   <Link
-                    href={`/contact?subject=Report Listing&business=${business.slug}`}
+                    href={reportListingUrl}
                     className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline"
                   >
                     Report this listing
@@ -500,7 +516,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 </p>
 
                 <Link
-                  href={`/contact?subject=Report Listing&business=${business.slug}`}
+                  href={suggestUpdateUrl}
                   className="mt-5 inline-flex rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
                 >
                   Suggest an update

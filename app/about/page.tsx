@@ -21,9 +21,10 @@ export default function AboutPage() {
           </p>
 
           <p className="mt-4 max-w-3xl leading-7 text-stone-700">
-            Standard business listings are free for everyone. Businesses that
-            want more visibility can choose a Featured or Premium listing, and
-            local adverts can also be placed on selected pages.
+            The main directory stays alphabetical so it is simple and fair to
+            browse. Featured and Premium listings get extra visibility on
+            Ollerton Hub, but they do not change the alphabetical order of the
+            directory.
           </p>
 
           <p className="mt-4 max-w-3xl leading-7 text-stone-700">
@@ -44,11 +45,11 @@ export default function AboutPage() {
               href="/contact?topic=subscriptions"
               className="rounded-xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white hover:bg-stone-800"
             >
-              Ask about paid options
+              Ask about listing options
             </Link>
 
             <Link
-              href="/contact?subject=request-local-amenity"
+              href="/contact?topic=local-info"
               className="rounded-xl border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-900 hover:bg-stone-50"
             >
               Request local amenity
@@ -59,10 +60,10 @@ export default function AboutPage() {
         <section className="mt-8 grid gap-6 lg:grid-cols-3">
           <PricingCard
             label="Free"
-            title="Standard Listing"
+            title="Free Listing"
             price="£0"
             priceNote="/ month"
-            description="For local businesses that want a basic presence in the public directory."
+            description="A simple listing for local businesses that want to be found in the directory."
             includedTitle="Includes:"
             items={[
               'Business profile page',
@@ -73,7 +74,7 @@ export default function AboutPage() {
               'Address or service area',
               'Logo upload',
               'Customer reviews',
-              'Appears in directory search results',
+              'Appears in the alphabetical directory',
             ]}
             bestFor="Best for businesses that simply want to be found online."
             href="/register"
@@ -86,16 +87,16 @@ export default function AboutPage() {
             title="Featured Listing"
             price="£10"
             priceNote="/ month"
-            description="For businesses that want more visibility than a standard free listing."
+            description="A simple visibility boost for businesses that want to stand out on Ollerton Hub."
             includedTitle="Includes everything in Free, plus:"
             items={[
-              'Featured badge on your listing',
-              'Priority placement above standard listings',
-              'Chance to appear on the homepage featured section',
-              'Highlighted card styling in the directory',
-              'Useful for seasonal offers or new businesses',
+              'Featured badge',
+              'Included in the Featured section on the homepage',
+              'Extra visibility outside the main directory',
+              'Useful for businesses that want more local attention',
+              'Directory order still remains alphabetical',
             ]}
-            bestFor="Best for businesses that want extra attention without a full promotion package."
+            bestFor="Best for businesses that want extra visibility without needing the full Premium package."
             href="/contact?topic=featured-listing"
             buttonText="Ask about Featured"
           />
@@ -106,18 +107,19 @@ export default function AboutPage() {
             title="Premium Listing"
             price="£25"
             priceNote="/ month"
-            description="For businesses that want the strongest directory visibility and access to performance metrics."
+            description="The highest visibility listing option for businesses that want a stronger presence."
             includedTitle="Includes everything in Featured, plus:"
             items={[
-              'Premium badge on your business profile',
-              'Highest placement in relevant directory results',
-              'Larger promotional area on your listing',
+              'Premium badge',
+              'Included in the Premium section on the homepage',
+              'Enhanced profile presence',
               'Option to highlight key services or offers',
               'Access to listing performance metrics',
               'View profile views and contact clicks',
-              'Suitable for ongoing local promotion',
+              'External review link option',
+              'Best visibility package on Ollerton Hub',
             ]}
-            bestFor="Best for businesses that rely on local visibility and want to be seen first."
+            bestFor="Best for businesses that rely on local visibility and want the strongest listing package."
             href="/contact?topic=premium-listing"
             buttonText="Ask about Premium"
           />
@@ -135,10 +137,14 @@ export default function AboutPage() {
               </h2>
 
               <p className="mt-3 max-w-3xl leading-7 text-stone-700">
-                Advert spaces are available for local businesses, community
-                events, seasonal offers and useful local services. These spaces
-                sit underneath the listing options on this page and can be used
-                to give your message more visibility.
+                Advert spaces are separate from Free, Featured and Premium
+                listings. They are designed for local adverts, sponsor messages,
+                community campaigns, seasonal offers and specific promotions.
+              </p>
+
+              <p className="mt-3 max-w-3xl leading-7 text-stone-700">
+                This is the best option if you want a dedicated advert-style
+                message rather than a listing package.
               </p>
             </div>
 
@@ -216,7 +222,7 @@ export default function AboutPage() {
 
             <div className="mt-5">
               <Link
-               href="/contact?topic=advert-enquiry"
+                href="/contact?topic=advert-enquiry"
                 className="inline-flex rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
               >
                 Ask about advertising
@@ -314,17 +320,17 @@ function PricingCard({
           {label}
         </p>
 
-        {featured && (
+        {featured ? (
           <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
-            Popular
+            Visibility boost
           </span>
-        )}
+        ) : null}
 
-        {premium && (
+        {premium ? (
           <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
-            Metrics included
+            Top package
           </span>
-        )}
+        ) : null}
       </div>
 
       <h2 className="mt-3 text-2xl font-bold text-stone-950">{title}</h2>

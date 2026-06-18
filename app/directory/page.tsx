@@ -54,37 +54,15 @@ function cleanSearchValue(value: string | null) {
   return value?.trim() ?? ''
 }
 
+function normalise(value: string | null | undefined) {
+  return (value || '').toLowerCase().trim()
+}
+
 function isOtherCategory(category: Category) {
   return (
     category.slug.toLowerCase() === 'other' ||
     category.name.toLowerCase() === 'other'
   )
-}
-
-function DirectoryContent() {
-  const searchParams = useSearchParams()
-  const queryString = searchParams.toString()
-
-  const [loading, setLoading] = useState(true)
-  const [listings, setListings] = useState<Listing[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [error, setError] = useState('')
-
-  const [search, setSearch] = useState(cleanSearchValue(searchParams.get('q')))
-  const [categoryFilter, setCategoryFilter] = useState(
-    cleanSearchValue(searchParams.get('category'))
-  )
-  const [townFilter, setTownFilter] = useState(
-    cleanSearchValue(searchParams.get('town'))
-  )
-  useEffect(() => {
-  setSearch(cleanSearchValue(searchParams.get('q')))
-  setCategoryFilter(cleanSearchValue(searchParams.get('category')))
-  setTownFilter(cleanSearchValue(searchParams.get('town')))
-}, [queryString, searchParams])
-
-  function normalise(value: string | null | undefined) {
-  return (value || '').toLowerCase().trim()
 }
 
 function getStrictLocalInfoSearchType(search: string) {
@@ -143,6 +121,30 @@ function getStrictLocalInfoSearchType(search: string) {
 
   return null
 }
+
+function DirectoryContent() {
+  const searchParams = useSearchParams()
+  const queryString = searchParams.toString()
+
+  const [loading, setLoading] = useState(true)
+  const [listings, setListings] = useState<Listing[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [error, setError] = useState('')
+
+  const [search, setSearch] = useState(cleanSearchValue(searchParams.get('q')))
+  const [categoryFilter, setCategoryFilter] = useState(
+    cleanSearchValue(searchParams.get('category'))
+  )
+  const [townFilter, setTownFilter] = useState(
+    cleanSearchValue(searchParams.get('town'))
+  )
+
+  useEffect(() => {
+    setSearch(cleanSearchValue(searchParams.get('q')))
+    setCategoryFilter(cleanSearchValue(searchParams.get('category')))
+    setTownFilter(cleanSearchValue(searchParams.get('town')))
+  }, [queryString, searchParams])
+
   useEffect(() => {
     loadDirectory()
   }, [])
@@ -159,7 +161,8 @@ function getStrictLocalInfoSearchType(search: string) {
 
       supabase
         .from('businesses')
-        .select(`
+        .select(
+          `
           id,
           business_name,
           slug,
@@ -175,10 +178,9 @@ function getStrictLocalInfoSearchType(search: string) {
             name,
             slug
           )
-        `)
+        `
+        )
         .eq('is_approved', true)
-        .order('is_premium', { ascending: false })
-        .order('is_featured', { ascending: false })
         .order('business_name', { ascending: true }),
     ])
 
@@ -196,7 +198,11 @@ function getStrictLocalInfoSearchType(search: string) {
       setError(listingsResult.error.message)
       setListings([])
     } else {
-      setListings((listingsResult.data || []) as Listing[])
+      const alphabeticalListings = ((listingsResult.data || []) as Listing[]).sort(
+        (a, b) => a.business_name.localeCompare(b.business_name)
+      )
+
+      setListings(alphabeticalListings)
     }
 
     setLoading(false)
@@ -212,44 +218,46 @@ function getStrictLocalInfoSearchType(search: string) {
     ).sort((a, b) => a.localeCompare(b))
   }, [listings])
 
-const filteredListings = useMemo(() => {
-  const searchTerm = search.toLowerCase().trim()
-  const strictLocalInfoType = getStrictLocalInfoSearchType(searchTerm)
+  const filteredListings = useMemo(() => {
+    const searchTerm = search.toLowerCase().trim()
+    const strictLocalInfoType = getStrictLocalInfoSearchType(searchTerm)
 
-  return listings.filter((listing) => {
-    const categoryName = getCategoryName(listing.categories)
-    const categorySlug = getCategorySlug(listing.categories)
+    return listings
+      .filter((listing) => {
+        const categoryName = getCategoryName(listing.categories)
+        const categorySlug = getCategorySlug(listing.categories)
 
-    const matchesCategory = categoryFilter
-      ? categorySlug === categoryFilter
-      : true
+        const matchesCategory = categoryFilter
+          ? categorySlug === categoryFilter
+          : true
 
-    const matchesTown = townFilter ? listing.town === townFilter : true
+        const matchesTown = townFilter ? listing.town === townFilter : true
 
-    if (!matchesCategory || !matchesTown) {
-      return false
-    }
+        if (!matchesCategory || !matchesTown) {
+          return false
+        }
 
-    if (strictLocalInfoType) {
-      return normalise(listing.useful_listing_type) === strictLocalInfoType
-    }
+        if (strictLocalInfoType) {
+          return normalise(listing.useful_listing_type) === strictLocalInfoType
+        }
 
-    const searchableText = `
-      ${listing.business_name}
-      ${listing.description || ''}
-      ${listing.town || ''}
-      ${listing.service_area || ''}
-      ${categoryName}
-      ${listing.useful_listing_type || ''}
-    `.toLowerCase()
+        const searchableText = `
+          ${listing.business_name}
+          ${listing.description || ''}
+          ${listing.town || ''}
+          ${listing.service_area || ''}
+          ${categoryName}
+          ${listing.useful_listing_type || ''}
+        `.toLowerCase()
 
-    const matchesSearch = searchTerm
-      ? searchableText.includes(searchTerm)
-      : true
+        const matchesSearch = searchTerm
+          ? searchableText.includes(searchTerm)
+          : true
 
-    return matchesSearch
-  })
-}, [listings, search, categoryFilter, townFilter])
+        return matchesSearch
+      })
+      .sort((a, b) => a.business_name.localeCompare(b.business_name))
+  }, [listings, search, categoryFilter, townFilter])
 
   function clearFilters() {
     setSearch('')
@@ -291,13 +299,13 @@ const filteredListings = useMemo(() => {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search by name, service or description..."
-              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm text-stone-900 lg:col-span-2"
+              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-red-600 lg:col-span-2"
             />
 
             <select
               value={categoryFilter}
               onChange={(event) => setCategoryFilter(event.target.value)}
-              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm text-stone-900"
+              className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-red-600"
             >
               <option value="">All categories</option>
               {categories.map((category) => (
@@ -310,7 +318,7 @@ const filteredListings = useMemo(() => {
             <select
               value={townFilter}
               onChange={(event) => setTownFilter(event.target.value)}
-              className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm text-stone-900"
+              className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm text-stone-900 outline-none focus:border-red-600"
             >
               <option value="">All towns</option>
               {towns.map((town) => (
@@ -323,7 +331,8 @@ const filteredListings = useMemo(() => {
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-stone-600">
-              Showing {filteredListings.length} of {listings.length} listings.
+              Showing {filteredListings.length} of {listings.length} listings,
+              alphabetically.
             </p>
 
             <button
@@ -335,68 +344,70 @@ const filteredListings = useMemo(() => {
             </button>
           </div>
         </section>
-<section className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
-  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-        Local amenities
-      </p>
 
-      <h2 className="mt-1 text-lg font-bold text-stone-950">
-        Schools, places of worship and useful local information
-      </h2>
+        <section className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                Local amenities
+              </p>
 
-      <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-        Quickly find local amenities such as schools, places of worship,
-        council services, recycling centres and community information.
-      </p>
-    </div>
+              <h2 className="mt-1 text-lg font-bold text-stone-950">
+                Schools, places of worship and useful local information
+              </h2>
 
-    <Link
-      href="/contact?topic=local-info"
-      className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
-    >
-      Suggest local info
-    </Link>
-  </div>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
+                Quickly find local amenities such as schools, places of worship,
+                council services, recycling centres and community information.
+              </p>
+            </div>
 
-  <div className="mt-4 flex flex-wrap gap-2">
-    <Link
-      href="/directory?q=school"
-      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
-    >
-      Schools
-    </Link>
+            <Link
+              href="/contact?topic=local-info"
+              className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+            >
+              Suggest local info
+            </Link>
+          </div>
 
-    <Link
-      href="/directory?q=place%20of%20worship"
-      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
-    >
-      Places of worship
-    </Link>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="/directory?q=school"
+              className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+            >
+              Schools
+            </Link>
 
-    <Link
-      href="/directory?q=council"
-      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
-    >
-      Council services
-    </Link>
+            <Link
+              href="/directory?q=place%20of%20worship"
+              className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+            >
+              Places of worship
+            </Link>
 
-    <Link
-      href="/directory?q=recycling"
-      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
-    >
-      Recycling centres
-    </Link>
+            <Link
+              href="/directory?q=council"
+              className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+            >
+              Council services
+            </Link>
 
-    <Link
-      href="/directory?q=mp"
-      className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
-    >
-      MP / councillors
-    </Link>
-  </div>
-</section>
+            <Link
+              href="/directory?q=recycling"
+              className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+            >
+              Recycling centres
+            </Link>
+
+            <Link
+              href="/directory?q=mp"
+              className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200"
+            >
+              MP / councillors
+            </Link>
+          </div>
+        </section>
+
         {error ? (
           <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-200">
             {error}
