@@ -392,8 +392,7 @@ export default async function HomePage() {
               </h2>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-                Premium is the highest visibility listing option for businesses
-                that want the strongest presence on Ollerton Hub.
+                
               </p>
             </div>
 
@@ -448,8 +447,7 @@ export default async function HomePage() {
               </h2>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-                Featured is a simple visibility boost for businesses that want
-                to stand out on Ollerton Hub.
+                
               </p>
             </div>
 
