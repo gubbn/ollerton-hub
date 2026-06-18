@@ -372,7 +372,7 @@ export default async function HomePage() {
             </div>
 
             <Link
-              href="/dashboard/business"
+              href="/register"
               className="inline-flex justify-center rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
             >
               Create or edit listing
