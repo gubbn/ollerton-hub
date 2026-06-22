@@ -12,14 +12,18 @@ const faqs = [
       'You can add your business by creating an account and submitting your listing. Once submitted, it will be reviewed before appearing publicly on the directory.',
   },
   {
+    question: 'What do you mean by "surrounding villages">',
+    answer:  'Villages up to a 10 mile radius of Ollerton, Nottinghamshire can list their business with Ollerton Hub.',
+  },
+  {
     question: 'Why does my business need to be approved?',
     answer:
-      'Business listings are reviewed before publication to help keep the directory useful, accurate and safe for local residents.',
+      'Business listings are reviewed before publication to help keep the directory useful, accurate and safe for local residents and to make sure that it stays a local directory.',
   },
   {
     question: 'How long does approval take?',
     answer:
-      'Approvals are handled manually. Most listings should be reviewed as soon as possible, but this may vary depending on availability.',
+      'Approvals are handled manually and should be approved within a few days.This will vary depending on availability.',
   },
   {
     question: 'Can I edit my listing after it has been approved?',
@@ -42,7 +46,7 @@ const faqs = [
       'Yes, customers can leave reviews on business listings. Reviews are checked before being published to help prevent spam or inappropriate content.',
   },
   {
-    question: 'Can reviews be left on local amenities?',
+    question: 'Can reviews be left for local amenities?',
     answer:
       'No. Reviews are intended for business listings only. Local amenities are listed for useful information rather than customer feedback.',
   },
@@ -59,7 +63,7 @@ const faqs = [
   {
     question: 'Who manages Ollerton Hub?',
     answer:
-      'Ollerton Hub is locally managed. Listings, reviews and contact requests are checked by the site admin.',
+      'Ollerton Hub is locally managed by Ollerton residents. Listings, reviews and contact requests are checked by the site admin. You can submit a request on the contact page if you wish to contact the team.',
   },
 ]
 

@@ -34,15 +34,15 @@ export default function Footer() {
                   Create a business listing
                 </Link>
 
-                <Link href="/faq" className="hover:text-red-600">
-                  FAQs
-                </Link>
-
                 <Link href="/login" className="hover:text-red-600">
                   Business login
                 </Link>
               </div>
             </div>
+
+            <Link href="/faq" className="hover:text-red-600">
+                  FAQs
+                </Link>
 
             <div>
               <h4 className="mb-3 text-sm font-bold text-stone-900">
