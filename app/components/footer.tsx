@@ -40,10 +40,6 @@ export default function Footer() {
               </div>
             </div>
 
-            <Link href="/faq" className="hover:text-red-600">
-                  FAQs
-                </Link>
-
             <div>
               <h4 className="mb-3 text-sm font-bold text-stone-900">
                 Useful links
@@ -52,6 +48,18 @@ export default function Footer() {
               <div className="flex flex-col gap-2 text-sm text-stone-600">
                 <Link href="/directory" className="hover:text-red-600">
                   Directory
+                </Link>
+
+                <Link href="/about" className="hover:text-red-600">
+                  About
+                </Link>
+
+                <Link href="/faq" className="hover:text-red-600">
+                  FAQs
+                </Link>
+
+                <Link href="/contact" className="hover:text-red-600">
+                  Contact
                 </Link>
 
                 <Link href="/terms" className="hover:text-red-600">
@@ -65,11 +73,6 @@ export default function Footer() {
                 <Link href="/cookies" className="hover:text-red-600">
                   Cookie Policy
                 </Link>
-
-                <Link href="/contact" className="hover:text-red-600">
-                  Contact
-                </Link>
-                <Link href="/about">About</Link>
               </div>
             </div>
           </div>
