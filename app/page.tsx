@@ -74,6 +74,29 @@ function sortByBusinessName(a: Business, b: Business) {
   return a.business_name.localeCompare(b.business_name)
 }
 
+function HomepageSquareAdvert() {
+  return (
+    <aside className="mx-auto w-full max-w-sm lg:max-w-none">
+      <Link
+        href="/register"
+        className="group relative block aspect-square overflow-hidden rounded-3xl bg-stone-100 shadow-sm ring-1 ring-white/20"
+        aria-label="Promote your business on Ollerton Hub"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/adverts/homepage-square-ollerton-hub.webp"
+          alt="Promote your business on Ollerton Hub"
+          className="h-full w-full object-cover transition group-hover:scale-105"
+        />
+
+        <div className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-stone-700 shadow-sm">
+          Advertisement
+        </div>
+      </Link>
+    </aside>
+  )
+}
+
 function PromotedBusinessCard({ business }: { business: Business }) {
   return (
     <Link
@@ -206,7 +229,7 @@ export default async function HomePage() {
     <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900">
       <section className="mx-auto max-w-[1500px] space-y-8">
         <section className="overflow-hidden rounded-3xl bg-stone-900 text-white shadow-sm">
-          <div className="grid gap-6 p-6 lg:grid-cols-[1.25fr_0.75fr] lg:p-8">
+          <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:p-8">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-red-300">
                 Local directory for Ollerton
@@ -251,42 +274,7 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <aside className="rounded-3xl bg-white p-5 text-stone-900 shadow-sm ring-1 ring-white/20">
-              <div className="flex h-full min-h-[260px] flex-col justify-between rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-                    Advert space
-                  </p>
-
-                  <h2 className="mt-2 text-2xl font-black leading-tight text-stone-950">
-                    Promote your business locally
-                  </h2>
-
-                  <p className="mt-3 text-sm leading-6 text-stone-600">
-                    This space is reserved for a local advert, sponsor message,
-                    event, offer or announcement.
-                  </p>
-                </div>
-
-                <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-stone-200">
-                  <p className="text-sm font-bold text-stone-900">
-                    Advert space available
-                  </p>
-
-                  <p className="mt-1 text-xs leading-5 text-stone-600">
-                    Use this for a dedicated advert separate from your directory
-                    listing.
-                  </p>
-
-                  <Link
-                    href="/contact?topic=advert-enquiry"
-                    className="mt-4 inline-flex rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
-                  >
-                    Ask about advertising
-                  </Link>
-                </div>
-              </div>
-            </aside>
+            <HomepageSquareAdvert />
           </div>
         </section>
 
@@ -392,7 +380,8 @@ export default async function HomePage() {
               </h2>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-                
+                Extra visibility for local businesses that want to stand out on
+                Ollerton Hub.
               </p>
             </div>
 
@@ -447,7 +436,8 @@ export default async function HomePage() {
               </h2>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-                
+                A small homepage boost for local businesses that want more
+                visibility.
               </p>
             </div>
 

@@ -52,6 +52,34 @@ type FormState = {
   cover_image_url: string
 }
 
+const businessSelect = `
+  id,
+  owner_id,
+  business_name,
+  slug,
+  description,
+  services,
+  phone,
+  email,
+  website,
+  facebook,
+  instagram,
+  address_line_1,
+  address_line_2,
+  town,
+  postcode,
+  service_area,
+  opening_times,
+  logo_url,
+  cover_image_url,
+  status,
+  is_approved,
+  is_featured,
+  is_premium,
+  listing_type,
+  useful_listing_type
+`
+
 const emptyForm: FormState = {
   business_name: '',
   description: '',
@@ -124,18 +152,63 @@ function normaliseNullable(value: string) {
   return trimmed.length > 0 ? trimmed : null
 }
 
+function createSlug(value: string) {
+  const base =
+    value
+      .toLowerCase()
+      .trim()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'business'
+
+  const suffix = Date.now().toString(36).slice(-6)
+
+  return `${base}-${suffix}`
+}
+
+function businessToForm(data: Business): FormState {
+  return {
+    business_name: data.business_name || '',
+    description: data.description || '',
+    services: data.services || '',
+    phone: data.phone || '',
+    email: data.email || '',
+    website: data.website || '',
+    facebook: data.facebook || '',
+    instagram: data.instagram || '',
+    address_line_1: data.address_line_1 || '',
+    address_line_2: data.address_line_2 || '',
+    town: data.town || '',
+    postcode: data.postcode || '',
+    service_area: data.service_area || '',
+    opening_times: data.opening_times || '',
+    logo_url: data.logo_url || '',
+    cover_image_url: data.cover_image_url || '',
+  }
+}
+
+function isApprovedBusiness(business: Business) {
+  return business.status === 'approved' || business.is_approved === true
+}
+
 export default function BusinessEditPage() {
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const [business, setBusiness] = useState<Business | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const isCreateMode = !business
+
   useEffect(() => {
     loadBusiness()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function loadBusiness() {
@@ -148,47 +221,24 @@ export default function BusinessEditPage() {
       error: userError,
     } = await supabase.auth.getUser()
 
-    if (userError || !user) {
-      router.push('/login')
+    if (userError) {
+      setError(userError.message)
+      setLoading(false)
       return
     }
 
+    if (!user) {
+      router.replace('/login')
+      return
+    }
+
+    setUserId(user.id)
+
     const { data, error: businessError } = await supabase
       .from('businesses')
-      .select(
-        `
-        id,
-        owner_id,
-        business_name,
-        slug,
-        description,
-        services,
-        phone,
-        email,
-        website,
-        facebook,
-        instagram,
-        address_line_1,
-        address_line_2,
-        town,
-        postcode,
-        service_area,
-        opening_times,
-        logo_url,
-        cover_image_url,
-        status,
-        is_approved,
-        is_featured,
-        is_premium,
-        listing_type,
-        useful_listing_type
-      `
-      )
+      .select(businessSelect)
       .eq('owner_id', user.id)
-      .or('listing_type.is.null,listing_type.eq.business')
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
 
     if (businessError) {
       setError('We could not load your business listing.')
@@ -196,42 +246,18 @@ export default function BusinessEditPage() {
       return
     }
 
-    if (!data) {
+    const businessRows = (data as Business[] | null) ?? []
+    const editableBusiness = businessRows.find((item) => !isAmenityListing(item))
+
+    if (!editableBusiness) {
       setBusiness(null)
+      setForm({ ...emptyForm })
       setLoading(false)
       return
     }
 
-    if (isAmenityListing(data)) {
-      setBusiness(null)
-      setError(
-        'This page is only for editing business listings. Local amenities cannot be edited here.'
-      )
-      setLoading(false)
-      return
-    }
-
-    setBusiness(data)
-
-    setForm({
-      business_name: data.business_name || '',
-      description: data.description || '',
-      services: data.services || '',
-      phone: data.phone || '',
-      email: data.email || '',
-      website: data.website || '',
-      facebook: data.facebook || '',
-      instagram: data.instagram || '',
-      address_line_1: data.address_line_1 || '',
-      address_line_2: data.address_line_2 || '',
-      town: data.town || '',
-      postcode: data.postcode || '',
-      service_area: data.service_area || '',
-      opening_times: data.opening_times || '',
-      logo_url: data.logo_url || '',
-      cover_image_url: data.cover_image_url || '',
-    })
-
+    setBusiness(editableBusiness)
+    setForm(businessToForm(editableBusiness))
     setLoading(false)
   }
 
@@ -261,14 +287,8 @@ export default function BusinessEditPage() {
     setError('')
     setSuccess('')
 
-    if (!business) {
-      setError('No business listing was found to update.')
-      setSaving(false)
-      return
-    }
-
-    if (isAmenityListing(business)) {
-      setError('Local amenities cannot be edited from this page.')
+    if (!userId) {
+      setError('You need to be logged in to manage a business listing.')
       setSaving(false)
       return
     }
@@ -295,53 +315,96 @@ export default function BusinessEditPage() {
       return
     }
 
-    const { error: updateError } = await supabase
-      .from('businesses')
-      .update({
-        business_name: form.business_name.trim(),
-        description: normaliseNullable(form.description),
-        services: normaliseNullable(form.services),
-        phone: normaliseNullable(form.phone),
-        email: normaliseNullable(form.email),
-        website: form.website.trim() ? cleanUrl(form.website) : null,
-        facebook: form.facebook.trim() ? cleanUrl(form.facebook) : null,
-        instagram: form.instagram.trim() ? cleanUrl(form.instagram) : null,
-        address_line_1: normaliseNullable(form.address_line_1),
-        address_line_2: normaliseNullable(form.address_line_2),
-        town: normaliseNullable(form.town),
-        postcode: normaliseNullable(form.postcode),
-        service_area: normaliseNullable(form.service_area),
-        opening_times: normaliseNullable(form.opening_times),
-        logo_url: form.logo_url.trim() ? cleanUrl(form.logo_url) : null,
-        cover_image_url: form.cover_image_url.trim()
-          ? cleanUrl(form.cover_image_url)
-          : null,
+    const postcode = form.postcode.trim()
+      ? form.postcode.trim().toUpperCase()
+      : null
 
-        // Keep this page business-only.
-        listing_type: 'business',
-        useful_listing_type: null,
+    const saveData = {
+      business_name: form.business_name.trim(),
+      description: normaliseNullable(form.description),
+      services: normaliseNullable(form.services),
+      phone: normaliseNullable(form.phone),
+      email: normaliseNullable(form.email),
+      website: form.website.trim() ? cleanUrl(form.website) : null,
+      facebook: form.facebook.trim() ? cleanUrl(form.facebook) : null,
+      instagram: form.instagram.trim() ? cleanUrl(form.instagram) : null,
+      address_line_1: normaliseNullable(form.address_line_1),
+      address_line_2: normaliseNullable(form.address_line_2),
+      town: normaliseNullable(form.town),
+      postcode,
+      service_area: normaliseNullable(form.service_area),
+      opening_times: normaliseNullable(form.opening_times),
+      logo_url: form.logo_url.trim() ? cleanUrl(form.logo_url) : null,
+      cover_image_url: form.cover_image_url.trim()
+        ? cleanUrl(form.cover_image_url)
+        : null,
 
-        // Send edited listings back for review.
-        status: 'pending',
-        is_approved: false,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', business.id)
-      .eq('owner_id', business.owner_id)
-      .or('listing_type.is.null,listing_type.eq.business')
+      listing_type: 'business',
+      useful_listing_type: null,
 
-    if (updateError) {
-      setError('We could not save your changes. Please try again.')
+      status: 'pending',
+      is_approved: false,
+      updated_at: new Date().toISOString(),
+    }
+
+    if (business) {
+      if (isAmenityListing(business)) {
+        setError('Local amenities cannot be edited from this page.')
+        setSaving(false)
+        return
+      }
+
+      const { data, error: updateError } = await supabase
+        .from('businesses')
+        .update(saveData)
+        .eq('id', business.id)
+        .eq('owner_id', userId)
+        .select(businessSelect)
+        .single()
+
+      if (updateError) {
+        setError('We could not save your changes. Please try again.')
+        setSaving(false)
+        return
+      }
+
+      const updatedBusiness = data as Business
+
+      setBusiness(updatedBusiness)
+      setForm(businessToForm(updatedBusiness))
+      setSuccess(
+        'Your changes have been saved and your listing is now waiting for approval.'
+      )
       setSaving(false)
       return
     }
 
+    const { data, error: insertError } = await supabase
+      .from('businesses')
+      .insert({
+        ...saveData,
+        owner_id: userId,
+        slug: createSlug(form.business_name),
+        is_featured: false,
+        is_premium: false,
+        created_at: new Date().toISOString(),
+      })
+      .select(businessSelect)
+      .single()
+
+    if (insertError) {
+      setError('We could not create your listing. Please try again.')
+      setSaving(false)
+      return
+    }
+
+    const createdBusiness = data as Business
+
+    setBusiness(createdBusiness)
+    setForm(businessToForm(createdBusiness))
     setSuccess(
-      'Your changes have been saved and your listing is now waiting for approval.'
+      'Your business listing has been created and is now waiting for approval.'
     )
-
-    await loadBusiness()
-
     setSaving(false)
   }
 
@@ -350,59 +413,6 @@ export default function BusinessEditPage() {
       <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
         <div className="mx-auto max-w-5xl">
           <p className="text-sm text-stone-600">Loading your listing...</p>
-        </div>
-      </main>
-    )
-  }
-
-  if (!business) {
-    return (
-      <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <Link
-            href="/dashboard"
-            className="inline-flex rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 shadow-sm transition hover:bg-stone-50"
-          >
-            Back to dashboard
-          </Link>
-
-          <section className="rounded-3xl bg-white p-6 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-wide text-red-600">
-              No editable business found
-            </p>
-
-            <h1 className="mt-3 text-3xl font-bold text-stone-950">
-              Business listing not found
-            </h1>
-
-            <p className="mt-4 text-sm leading-6 text-stone-600">
-              We could not find a business listing linked to your account. This
-              page is only for editing business listings. Local amenities and
-              useful local information cannot be edited here.
-            </p>
-
-            {error && (
-              <div className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                href="/register"
-                className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
-              >
-                Create a business listing
-              </Link>
-
-              <Link
-                href="/contact"
-                className="rounded-full border border-stone-300 px-5 py-2.5 text-sm font-semibold text-stone-800 transition hover:bg-stone-50"
-              >
-                Contact support
-              </Link>
-            </div>
-          </section>
         </div>
       </main>
     )
@@ -419,28 +429,35 @@ export default function BusinessEditPage() {
             Back to dashboard
           </Link>
 
-          <Link
-            href={`/business/${business.slug}`}
-            className="inline-flex rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 shadow-sm transition hover:bg-stone-50"
-          >
-            View public listing
-          </Link>
+          {business && isApprovedBusiness(business) ? (
+            <Link
+              href={`/business/${business.slug}`}
+              className="inline-flex rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 shadow-sm transition hover:bg-stone-50"
+            >
+              View public listing
+            </Link>
+          ) : null}
         </div>
 
         <header className="rounded-3xl bg-white p-6 shadow-sm md:p-8">
           <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-red-600">
-                Edit business listing
+                {isCreateMode
+                  ? 'Create business listing'
+                  : 'Edit business listing'}
               </p>
 
               <h1 className="mt-3 text-3xl font-bold text-stone-950 md:text-4xl">
-                {business.business_name}
+                {isCreateMode
+                  ? 'Add your business to Ollerton Hub'
+                  : business.business_name}
               </h1>
 
               <p className="mt-4 max-w-3xl text-sm leading-6 text-stone-600">
-                Update your business details below. This page is for business
-                listings only and cannot be used to edit local amenities.
+                {isCreateMode
+                  ? 'Complete the form below to create your business listing. Once submitted, it will be reviewed before appearing in the directory.'
+                  : 'Update your business details below. Saving changes will return your listing to pending approval.'}
               </p>
             </div>
 
@@ -452,24 +469,24 @@ export default function BusinessEditPage() {
               <p className="mt-1 text-xs text-stone-500">
                 Status:{' '}
                 <span className="font-semibold capitalize text-stone-700">
-                  {business.status || 'pending'}
+                  {business?.status || 'pending'}
                 </span>
               </p>
             </div>
           </div>
         </header>
 
-        {error && (
+        {error ? (
           <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
-        )}
+        ) : null}
 
-        {success && (
+        {success ? (
           <div className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-700">
             {success}
           </div>
-        )}
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <section className="rounded-3xl bg-white p-6 shadow-sm">
@@ -698,9 +715,7 @@ export default function BusinessEditPage() {
           </section>
 
           <section className="rounded-3xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-stone-950">
-              Images
-            </h2>
+            <h2 className="text-xl font-bold text-stone-950">Images</h2>
 
             <p className="mt-2 text-sm text-stone-600">
               Paste image URLs for now. Logo uploads can be added later if
@@ -742,11 +757,13 @@ export default function BusinessEditPage() {
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="text-lg font-bold text-stone-950">
-                  Save changes
+                  {isCreateMode ? 'Submit listing' : 'Save changes'}
                 </h2>
+
                 <p className="mt-1 text-sm text-stone-600">
-                  Saving changes will return your business listing to pending
-                  approval.
+                  {isCreateMode
+                    ? 'Your listing will be reviewed before it appears in the public directory.'
+                    : 'Saving changes will return your business listing to pending approval.'}
                 </p>
               </div>
 
@@ -755,7 +772,13 @@ export default function BusinessEditPage() {
                 disabled={saving}
                 className="rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-stone-400"
               >
-                {saving ? 'Saving...' : 'Save changes'}
+                {saving
+                  ? isCreateMode
+                    ? 'Creating...'
+                    : 'Saving...'
+                  : isCreateMode
+                    ? 'Create listing'
+                    : 'Save changes'}
               </button>
             </div>
           </section>

@@ -51,11 +51,13 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
+function isApprovedBusiness(business: Business) {
+  return business.status === 'approved' || business.is_approved === true
+}
+
 function getApprovalLabel(business: Business) {
   if (business.status === 'rejected') return 'Rejected listing'
-  if (business.status === 'approved' || business.is_approved === true) {
-    return 'Approved listing'
-  }
+  if (isApprovedBusiness(business)) return 'Approved listing'
 
   return 'Awaiting approval'
 }
@@ -65,7 +67,7 @@ function getApprovalBadgeClasses(business: Business) {
     return 'bg-red-100 text-red-800'
   }
 
-  if (business.status === 'approved' || business.is_approved === true) {
+  if (isApprovedBusiness(business)) {
     return 'bg-green-100 text-green-800'
   }
 
@@ -92,10 +94,17 @@ export default function DashboardPage() {
 
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser()
 
+    if (userError) {
+      setError(userError.message)
+      setLoading(false)
+      return
+    }
+
     if (!user) {
-      router.push('/login')
+      router.replace('/login')
       return
     }
 
@@ -124,7 +133,8 @@ export default function DashboardPage() {
         `
         )
         .eq('owner_id', user.id)
-        .neq('listing_type', 'community')
+        .or('listing_type.is.null,listing_type.eq.business')
+        .limit(1)
         .maybeSingle(),
     ])
 
@@ -145,9 +155,6 @@ export default function DashboardPage() {
     if (businessResult.data) {
       const loadedBusiness = businessResult.data as Business
       setBusiness(loadedBusiness)
-
-      // Keep loading stats for all businesses.
-      // Only Premium users see the numbers on the dashboard.
       await loadStats(loadedBusiness.id)
     } else {
       setBusiness(null)
@@ -164,7 +171,6 @@ export default function DashboardPage() {
       .eq('business_id', businessId)
 
     const statsData = (data as BusinessStat[] | null) ?? []
-
     const nextStats: Stats = { ...emptyStats }
 
     statsData.forEach((item) => {
@@ -178,7 +184,7 @@ export default function DashboardPage() {
 
   async function signOut() {
     await supabase.auth.signOut()
-    router.push('/login')
+    router.replace('/login')
   }
 
   if (loading) {
@@ -331,7 +337,7 @@ export default function DashboardPage() {
                 </h2>
               </div>
 
-              {business.is_approved ? (
+              {isApprovedBusiness(business) ? (
                 <Link
                   href={`/business/${business.slug}`}
                   className="text-sm font-medium text-red-700 hover:underline"
@@ -365,11 +371,12 @@ export default function DashboardPage() {
 
         <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           <DashboardCard
-  title="Suggest local amenities"
-  description="Tell us about a school, place of worship, recycling centre, council service, community group or other useful local information."
-  href="/contact?topic=local-info"
-  buttonText="Submit local info"
-/>
+            title="Suggest local amenities"
+            description="Tell us about a school, place of worship, recycling centre, council service, community group or other useful local information."
+            href="/contact?topic=local-info"
+            buttonText="Submit local info"
+          />
+
           <DashboardCard
             title={
               business ? 'Edit business listing' : 'Create business listing'
@@ -413,6 +420,13 @@ export default function DashboardPage() {
               Create your listing first. Once approved, your business can appear
               in the public directory.
             </p>
+
+            <Link
+              href="/dashboard/business"
+              className="mt-4 inline-flex rounded-xl bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
+            >
+              Create business listing
+            </Link>
           </section>
         ) : null}
       </div>
@@ -510,7 +524,9 @@ function DashboardCard({
       <Link
         href={href}
         className={`mt-5 inline-block rounded-xl px-4 py-2 text-sm font-semibold text-white ${
-          admin ? 'bg-stone-900 hover:bg-stone-800' : 'bg-red-700 hover:bg-red-800'
+          admin
+            ? 'bg-stone-900 hover:bg-stone-800'
+            : 'bg-red-700 hover:bg-red-800'
         }`}
       >
         {buttonText}
