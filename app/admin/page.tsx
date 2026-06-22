@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
+import { expireOldPaidListings } from '@/lib/expirePaidListings'
 type Business = {
   id: string
   business_name: string
@@ -41,7 +42,10 @@ function getListingStatus(listing: Business) {
 }
 
 function isBusinessListing(listing: Business) {
-  return listing.listing_type !== 'community' && listing.listing_type !== 'local_info'
+  return (
+    listing.listing_type !== 'community' &&
+    listing.listing_type !== 'local_info'
+  )
 }
 
 function startOfWeek(date: Date) {
@@ -108,6 +112,8 @@ export default function AdminPage() {
     }
 
     setIsAdmin(true)
+
+    await expireOldPaidListings()
 
     const [
       businessesResult,
@@ -389,10 +395,10 @@ export default function AdminPage() {
           />
 
           <AdminActionCard
-  title="Local amenities"
-  description="Add and amend schools, places of worship, council services and other useful local information."
-  href="/admin/amenities"
-/>
+            title="Local amenities"
+            description="Add and amend schools, places of worship, council services and other useful local information."
+            href="/admin/amenities"
+          />
         </section>
 
         <section className="rounded-3xl bg-white p-5 shadow-sm">

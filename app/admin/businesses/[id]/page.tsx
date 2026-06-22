@@ -1,9 +1,14 @@
 'use client'
 
-import { ChangeEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import {
+  getRenewedExpiryDate,
+  getThirtyDaysFromNow,
+  type PaidTier,
+} from '@/lib/paidTierHelpers'
 
 type Category = {
   id: string
@@ -11,7 +16,6 @@ type Category = {
 }
 
 type PendingChangeValue = string | boolean | null
-
 type PendingChanges = Record<string, PendingChangeValue>
 
 type Business = {
@@ -39,6 +43,11 @@ type Business = {
   is_approved: boolean | null
   is_featured: boolean | null
   is_premium: boolean | null
+  paid_tier: PaidTier | null
+  paid_tier_started_at: string | null
+  paid_tier_expires_at: string | null
+  paid_tier_renewed_at: string | null
+  paid_tier_last_downgraded_at: string | null
   use_external_reviews: boolean | null
   external_review_platform: string | null
   external_review_url: string | null
@@ -56,8 +65,6 @@ type EditableBusinessField =
   | 'business_name'
   | 'slug'
   | 'category_id'
-  | 'listing_type'
-  | 'useful_listing_type'
   | 'description'
   | 'services'
   | 'phone'
@@ -74,8 +81,6 @@ type EditableBusinessField =
   | 'logo_url'
   | 'status'
   | 'is_approved'
-  | 'is_featured'
-  | 'is_premium'
   | 'use_external_reviews'
   | 'external_review_platform'
   | 'external_review_url'
@@ -105,6 +110,11 @@ const BUSINESS_SELECT = `
   is_approved,
   is_featured,
   is_premium,
+  paid_tier,
+  paid_tier_started_at,
+  paid_tier_expires_at,
+  paid_tier_renewed_at,
+  paid_tier_last_downgraded_at,
   use_external_reviews,
   external_review_platform,
   external_review_url,
@@ -127,8 +137,6 @@ const REVIEWABLE_PENDING_FIELDS = [
   'use_external_reviews',
   'external_review_platform',
   'external_review_url',
-  'listing_type',
-  'useful_listing_type',
 ] as const
 
 const APPROVABLE_PENDING_FIELDS = [
@@ -140,8 +148,6 @@ const FIELD_LABELS: Record<string, string> = {
   business_name: 'Business name',
   slug: 'Business URL',
   category_id: 'Category',
-  listing_type: 'Listing type',
-  useful_listing_type: 'Useful listing type',
   description: 'Description',
   services: 'Services',
   logo_url: 'Logo',
@@ -151,20 +157,28 @@ const FIELD_LABELS: Record<string, string> = {
 }
 
 function cleanTextValue(value: string | null | undefined) {
-  const trimmedValue = (value ?? '').trim()
-  return trimmedValue.length > 0 ? trimmedValue : null
+  const trimmed = (value ?? '').trim()
+  return trimmed.length > 0 ? trimmed : null
 }
 
 function normaliseUrl(value: string | null | undefined) {
-  const trimmedValue = (value ?? '').trim()
+  const trimmed = (value ?? '').trim()
 
-  if (!trimmedValue) return null
+  if (!trimmed) return null
 
-  if (/^https?:\/\//i.test(trimmedValue)) {
-    return trimmedValue
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed
   }
 
-  return `https://${trimmedValue}`
+  return `https://${trimmed}`
+}
+
+function isLocalAmenity(listing: Business) {
+  return (
+    listing.listing_type === 'community' ||
+    listing.listing_type === 'local_info' ||
+    !!listing.useful_listing_type
+  )
 }
 
 function getPendingChanges(business: Business | null): PendingChanges {
@@ -174,10 +188,6 @@ function getPendingChanges(business: Business | null): PendingChanges {
   return business.pending_changes
 }
 
-function formatFieldLabel(field: string) {
-  return FIELD_LABELS[field] ?? field.replace(/_/g, ' ')
-}
-
 function formatDate(value: string | null) {
   if (!value) return 'Not recorded'
 
@@ -185,6 +195,10 @@ function formatDate(value: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+function formatFieldLabel(field: string) {
+  return FIELD_LABELS[field] ?? field.replace(/_/g, ' ')
 }
 
 function getStatusClasses(status: string | null) {
@@ -206,6 +220,12 @@ function getCategoryName(categories: Category[], categoryId: string | null) {
     categories.find((category) => category.id === categoryId)?.name ??
     `Unknown category (${categoryId})`
   )
+}
+
+function getPaidTierLabel(tier: PaidTier | null) {
+  if (tier === 'featured') return 'Featured'
+  if (tier === 'premium') return 'Premium'
+  return 'Free'
 }
 
 function getDisplayValue({
@@ -232,6 +252,25 @@ function getDisplayValue({
   return String(value)
 }
 
+function getBusinessPendingValue(
+  business: Business,
+  field: string
+): PendingChangeValue {
+  if (field === 'business_name') return business.business_name
+  if (field === 'slug') return business.slug
+  if (field === 'category_id') return business.category_id
+  if (field === 'description') return business.description
+  if (field === 'services') return business.services
+  if (field === 'logo_url') return business.logo_url
+  if (field === 'use_external_reviews') return business.use_external_reviews
+  if (field === 'external_review_platform') {
+    return business.external_review_platform
+  }
+  if (field === 'external_review_url') return business.external_review_url
+
+  return null
+}
+
 function FieldValue({
   field,
   value,
@@ -256,13 +295,19 @@ function FieldValue({
     )
   }
 
-  return <p className="whitespace-pre-wrap break-words text-sm">{displayValue}</p>
+  return (
+    <p className="whitespace-pre-wrap break-words text-sm">{displayValue}</p>
+  )
 }
 
 export default function ManageBusinessPage() {
   const params = useParams()
   const router = useRouter()
-  const businessId = params.id as string
+
+  const rawBusinessId = params.id
+  const businessId = Array.isArray(rawBusinessId)
+    ? rawBusinessId[0]
+    : String(rawBusinessId)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -295,6 +340,7 @@ export default function ManageBusinessPage() {
 
   async function loadBusiness(showLoading = true) {
     if (showLoading) setLoading(true)
+
     setError('')
     setSuccess('')
 
@@ -310,7 +356,7 @@ export default function ManageBusinessPage() {
     }
 
     if (!user) {
-      router.push('/')
+      router.push('/login')
       return
     }
 
@@ -329,7 +375,7 @@ export default function ManageBusinessPage() {
     }
 
     if (!profile?.is_admin) {
-      router.push('/')
+      router.push('/dashboard')
       return
     }
 
@@ -344,7 +390,7 @@ export default function ManageBusinessPage() {
       return
     }
 
-    setCategories((categoryData as Category[] | null) ?? [])
+    setCategories(categoryData ?? [])
 
     const { data, error: businessError } = await supabase
       .from('businesses')
@@ -355,11 +401,19 @@ export default function ManageBusinessPage() {
     if (businessError) {
       setError(businessError.message)
       setBusiness(null)
-    } else {
-      setBusiness(data as Business)
-      setRejectionReason('')
+      setLoading(false)
+      return
     }
 
+    const loadedBusiness = data as Business
+
+    if (isLocalAmenity(loadedBusiness)) {
+      router.push('/admin/amenities')
+      return
+    }
+
+    setBusiness(loadedBusiness)
+    setRejectionReason('')
     setLoading(false)
   }
 
@@ -391,14 +445,16 @@ export default function ManageBusinessPage() {
       return
     }
 
+    const now = new Date().toISOString()
+
     const { data, error: updateError } = await supabase
       .from('businesses')
       .update({
         business_name: business.business_name.trim(),
         slug: business.slug.trim(),
         category_id: business.category_id || null,
-        listing_type: cleanTextValue(business.listing_type),
-        useful_listing_type: cleanTextValue(business.useful_listing_type),
+        listing_type: 'business',
+        useful_listing_type: null,
         description: cleanTextValue(business.description),
         services: cleanTextValue(business.services),
         phone: cleanTextValue(business.phone),
@@ -415,8 +471,6 @@ export default function ManageBusinessPage() {
         logo_url: cleanTextValue(business.logo_url),
         status: business.status || 'pending',
         is_approved: business.is_approved === true,
-        is_featured: business.is_featured === true,
-        is_premium: business.is_premium === true,
         use_external_reviews: business.use_external_reviews === true,
         external_review_platform: business.use_external_reviews
           ? cleanTextValue(business.external_review_platform)
@@ -424,9 +478,11 @@ export default function ManageBusinessPage() {
         external_review_url: business.use_external_reviews
           ? normaliseUrl(business.external_review_url)
           : null,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       })
       .eq('id', business.id)
+      .not('listing_type', 'eq', 'community')
+      .not('listing_type', 'eq', 'local_info')
       .select(BUSINESS_SELECT)
       .single()
 
@@ -453,9 +509,13 @@ export default function ManageBusinessPage() {
       .update({
         status: 'approved',
         is_approved: true,
+        listing_type: 'business',
+        useful_listing_type: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', business.id)
+      .not('listing_type', 'eq', 'community')
+      .not('listing_type', 'eq', 'local_info')
       .select(BUSINESS_SELECT)
       .single()
 
@@ -483,6 +543,8 @@ export default function ManageBusinessPage() {
     setError('')
     setSuccess('')
 
+    const now = new Date().toISOString()
+
     const { data, error: updateError } = await supabase
       .from('businesses')
       .update({
@@ -491,11 +553,13 @@ export default function ManageBusinessPage() {
         pending_changes: {},
         pending_changed_fields: [],
         has_pending_changes: false,
-        changes_reviewed_at: new Date().toISOString(),
+        changes_reviewed_at: now,
         changes_reviewed_by: adminUserId || null,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       })
       .eq('id', business.id)
+      .not('listing_type', 'eq', 'community')
+      .not('listing_type', 'eq', 'local_info')
       .select(BUSINESS_SELECT)
       .single()
 
@@ -510,22 +574,42 @@ export default function ManageBusinessPage() {
     setSuccess('Business rejected.')
   }
 
-  async function toggleFeatured() {
+  async function updatePaidTier(tier: PaidTier) {
     if (!business) return
-
-    const newValue = !business.is_featured
 
     setSaving(true)
     setError('')
     setSuccess('')
 
+    const { now, expiresAt } = getThirtyDaysFromNow()
+
+    const payload =
+      tier === 'free'
+        ? {
+            paid_tier: 'free',
+            is_featured: false,
+            is_premium: false,
+            paid_tier_started_at: null,
+            paid_tier_expires_at: null,
+            paid_tier_renewed_at: null,
+            updated_at: now,
+          }
+        : {
+            paid_tier: tier,
+            is_featured: tier === 'featured',
+            is_premium: tier === 'premium',
+            paid_tier_started_at: now,
+            paid_tier_expires_at: expiresAt,
+            paid_tier_renewed_at: null,
+            updated_at: now,
+          }
+
     const { data, error: updateError } = await supabase
       .from('businesses')
-      .update({
-        is_featured: newValue,
-        updated_at: new Date().toISOString(),
-      })
+      .update(payload)
       .eq('id', business.id)
+      .not('listing_type', 'eq', 'community')
+      .not('listing_type', 'eq', 'local_info')
       .select(BUSINESS_SELECT)
       .single()
 
@@ -538,8 +622,46 @@ export default function ManageBusinessPage() {
 
     setBusiness(data as Business)
     setSuccess(
-      newValue ? 'Business marked as featured.' : 'Business removed from featured.'
+      tier === 'free'
+        ? 'Listing changed back to Free.'
+        : `Listing changed to ${getPaidTierLabel(tier)} for 30 days.`
     )
+  }
+
+  async function renewPaidTier() {
+    if (!business) return
+
+    setSaving(true)
+    setError('')
+    setSuccess('')
+
+    const { renewedAt, expiresAt } = getRenewedExpiryDate(
+      business.paid_tier_expires_at
+    )
+
+    const { data, error: updateError } = await supabase
+      .from('businesses')
+      .update({
+        paid_tier_renewed_at: renewedAt,
+        paid_tier_expires_at: expiresAt,
+        updated_at: renewedAt,
+      })
+      .eq('id', business.id)
+      .in('paid_tier', ['featured', 'premium'])
+      .not('listing_type', 'eq', 'community')
+      .not('listing_type', 'eq', 'local_info')
+      .select(BUSINESS_SELECT)
+      .single()
+
+    setSaving(false)
+
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+
+    setBusiness(data as Business)
+    setSuccess('Listing renewed for another 30 days.')
   }
 
   async function approvePendingChanges() {
@@ -557,7 +679,7 @@ export default function ManageBusinessPage() {
           field as (typeof APPROVABLE_PENDING_FIELDS)[number]
         )
       ) {
-        approvedChanges[field] = value as PendingChangeValue
+        approvedChanges[field] = value
       }
     })
 
@@ -567,6 +689,8 @@ export default function ManageBusinessPage() {
       .from('businesses')
       .update({
         ...approvedChanges,
+        listing_type: 'business',
+        useful_listing_type: null,
         pending_changes: {},
         pending_changed_fields: [],
         has_pending_changes: false,
@@ -576,6 +700,8 @@ export default function ManageBusinessPage() {
         updated_at: now,
       })
       .eq('id', business.id)
+      .not('listing_type', 'eq', 'community')
+      .not('listing_type', 'eq', 'local_info')
       .select(BUSINESS_SELECT)
       .single()
 
@@ -618,6 +744,8 @@ export default function ManageBusinessPage() {
         updated_at: now,
       })
       .eq('id', business.id)
+      .not('listing_type', 'eq', 'community')
+      .not('listing_type', 'eq', 'local_info')
       .select(BUSINESS_SELECT)
       .single()
 
@@ -650,6 +778,8 @@ export default function ManageBusinessPage() {
       .from('businesses')
       .delete()
       .eq('id', business.id)
+      .not('listing_type', 'eq', 'community')
+      .not('listing_type', 'eq', 'local_info')
 
     setSaving(false)
 
@@ -665,7 +795,7 @@ export default function ManageBusinessPage() {
     return (
       <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
         <section className="mx-auto max-w-5xl">
-          <p>Loading business...</p>
+          <p className="text-sm text-stone-600">Loading business...</p>
         </section>
       </main>
     )
@@ -718,14 +848,14 @@ export default function ManageBusinessPage() {
                   </span>
                 )}
 
-                {business.is_featured && (
-                  <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
+                {business.paid_tier === 'featured' && (
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200">
                     Featured
                   </span>
                 )}
 
-                {business.is_premium && (
-                  <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-800 ring-1 ring-purple-200">
+                {business.paid_tier === 'premium' && (
+                  <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
                     Premium
                   </span>
                 )}
@@ -770,15 +900,6 @@ export default function ManageBusinessPage() {
               >
                 Reject listing
               </button>
-
-              <button
-                type="button"
-                onClick={toggleFeatured}
-                disabled={saving}
-                className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {business.is_featured ? 'Unfeature' : 'Feature'}
-              </button>
             </div>
           </div>
 
@@ -794,14 +915,102 @@ export default function ManageBusinessPage() {
             </p>
           )}
 
-          {!hasPendingChanges && business.change_rejection_reason && (
-            <div className="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
-              <p className="font-semibold">Last change rejection note</p>
-              <p className="mt-1 whitespace-pre-wrap">
-                {business.change_rejection_reason}
+          <section className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
+            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-stone-950">
+                  Paid listing
+                </h2>
+
+                <p className="mt-2 text-sm text-stone-600">
+                  Featured and Premium listings run for 30 days from purchase or
+                  renewal.
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-stone-100 px-4 py-3 text-sm">
+                <p className="font-semibold text-stone-950">
+                  {getPaidTierLabel(business.paid_tier)}
+                </p>
+                <p className="mt-1 text-xs text-stone-500">Current tier</p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => updatePaidTier('free')}
+                disabled={saving}
+                className="rounded-2xl border border-stone-300 px-4 py-3 text-sm font-semibold text-stone-800 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Free
+              </button>
+
+              <button
+                type="button"
+                onClick={() => updatePaidTier('featured')}
+                disabled={saving}
+                className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Featured - 30 days
+              </button>
+
+              <button
+                type="button"
+                onClick={() => updatePaidTier('premium')}
+                disabled={saving}
+                className="rounded-2xl border border-stone-900 bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Premium - 30 days
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 rounded-2xl bg-stone-50 p-4 text-sm text-stone-700 md:grid-cols-3">
+              <p>
+                <span className="block text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  Purchased
+                </span>
+                {formatDate(business.paid_tier_started_at)}
+              </p>
+
+              <p>
+                <span className="block text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  Expires
+                </span>
+                {formatDate(business.paid_tier_expires_at)}
+              </p>
+
+              <p>
+                <span className="block text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  Last renewed
+                </span>
+                {formatDate(business.paid_tier_renewed_at)}
               </p>
             </div>
-          )}
+
+            {(business.paid_tier === 'featured' ||
+              business.paid_tier === 'premium') && (
+              <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-red-900">
+                    Renew paid listing
+                  </p>
+                  <p className="mt-1 text-sm text-red-700">
+                    Add another 30 days onto the current expiry date.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={renewPaidTier}
+                  disabled={saving}
+                  className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-stone-400"
+                >
+                  Renew for 30 days
+                </button>
+              </div>
+            )}
+          </section>
 
           {hasPendingChanges && (
             <section className="mt-8 rounded-2xl border border-amber-300 bg-amber-50 p-5">
@@ -844,9 +1053,7 @@ export default function ManageBusinessPage() {
 
               <div className="mt-5 space-y-4">
                 {pendingFields.map((field) => {
-                  const currentValue = business[field as keyof Business] as
-                    | PendingChangeValue
-                    | undefined
+                  const currentValue = getBusinessPendingValue(business, field)
                   const proposedValue = pendingChanges[field]
 
                   return (
@@ -860,7 +1067,8 @@ export default function ManageBusinessPage() {
 
                       {field === 'business_name' && pendingChanges.slug && (
                         <p className="mt-1 text-xs text-stone-500">
-                          The public URL will also update to /business/{pendingChanges.slug}
+                          The public URL will also update to /business/
+                          {pendingChanges.slug}
                         </p>
                       )}
 
@@ -916,8 +1124,8 @@ export default function ManageBusinessPage() {
                   Approved/live listing details
                 </h2>
                 <p className="mt-1 text-sm text-stone-600">
-                  Edits saved here update the live business record directly. They
-                  do not approve or reject owner-submitted pending changes.
+                  Edits saved here update the live business record directly.
+                  Paid listing status is managed separately above.
                 </p>
               </div>
 
@@ -932,31 +1140,25 @@ export default function ManageBusinessPage() {
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <label className="block text-sm font-semibold text-stone-700 md:col-span-2">
-                Business name
-                <input
-                  value={business.business_name}
-                  onChange={(event) =>
-                    updateField('business_name', event.target.value)
-                  }
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Business name"
+                value={business.business_name}
+                onChange={(value) => updateField('business_name', value)}
+                fullWidth
+              />
 
-              <label className="block text-sm font-semibold text-stone-700 md:col-span-2">
-                Slug
-                <input
-                  value={business.slug}
-                  onChange={(event) => updateField('slug', event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Slug"
+                value={business.slug}
+                onChange={(value) => updateField('slug', value)}
+                fullWidth
+              />
 
               <label className="block text-sm font-semibold text-stone-700">
                 Category
                 <select
                   value={business.category_id ?? ''}
-                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                  onChange={(event) =>
                     updateField('category_id', event.target.value)
                   }
                   className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
@@ -983,109 +1185,63 @@ export default function ManageBusinessPage() {
                 </select>
               </label>
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Listing type
-                <input
-                  value={business.listing_type ?? ''}
-                  onChange={(event) =>
-                    updateField('listing_type', event.target.value)
-                  }
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                  placeholder="business"
-                />
-              </label>
+              <TextAreaInput
+                label="Description"
+                value={business.description ?? ''}
+                onChange={(value) => updateField('description', value)}
+                rows={5}
+                fullWidth
+              />
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Useful listing type
-                <input
-                  value={business.useful_listing_type ?? ''}
-                  onChange={(event) =>
-                    updateField('useful_listing_type', event.target.value)
-                  }
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                  placeholder="School, place of worship, council service..."
-                />
-              </label>
+              <TextAreaInput
+                label="Services"
+                value={business.services ?? ''}
+                onChange={(value) => updateField('services', value)}
+                rows={4}
+                fullWidth
+              />
 
-              <label className="block text-sm font-semibold text-stone-700 md:col-span-2">
-                Description
-                <textarea
-                  value={business.description ?? ''}
-                  onChange={(event) =>
-                    updateField('description', event.target.value)
-                  }
-                  rows={5}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Phone"
+                value={business.phone ?? ''}
+                onChange={(value) => updateField('phone', value)}
+              />
 
-              <label className="block text-sm font-semibold text-stone-700 md:col-span-2">
-                Services
-                <textarea
-                  value={business.services ?? ''}
-                  onChange={(event) => updateField('services', event.target.value)}
-                  rows={4}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Email"
+                value={business.email ?? ''}
+                onChange={(value) => updateField('email', value)}
+              />
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Phone
-                <input
-                  value={business.phone ?? ''}
-                  onChange={(event) => updateField('phone', event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Website"
+                value={business.website ?? ''}
+                onChange={(value) => updateField('website', value)}
+              />
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Email
-                <input
-                  value={business.email ?? ''}
-                  onChange={(event) => updateField('email', event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Facebook"
+                value={business.facebook ?? ''}
+                onChange={(value) => updateField('facebook', value)}
+              />
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Website
-                <input
-                  value={business.website ?? ''}
-                  onChange={(event) => updateField('website', event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Instagram"
+                value={business.instagram ?? ''}
+                onChange={(value) => updateField('instagram', value)}
+              />
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Facebook
-                <input
-                  value={business.facebook ?? ''}
-                  onChange={(event) => updateField('facebook', event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
-
-              <label className="block text-sm font-semibold text-stone-700">
-                Instagram
-                <input
-                  value={business.instagram ?? ''}
-                  onChange={(event) => updateField('instagram', event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
-
-              <label className="block text-sm font-semibold text-stone-700">
-                Logo URL
-                <input
-                  value={business.logo_url ?? ''}
-                  onChange={(event) => updateField('logo_url', event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Logo URL"
+                value={business.logo_url ?? ''}
+                onChange={(value) => updateField('logo_url', value)}
+              />
 
               {business.logo_url && (
                 <div className="rounded-xl border border-stone-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-stone-700">Current logo</p>
+                  <p className="text-sm font-semibold text-stone-700">
+                    Current logo
+                  </p>
                   <img
                     src={business.logo_url}
                     alt={`${business.business_name} logo`}
@@ -1094,69 +1250,45 @@ export default function ManageBusinessPage() {
                 </div>
               )}
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Address line 1
-                <input
-                  value={business.address_line_1 ?? ''}
-                  onChange={(event) =>
-                    updateField('address_line_1', event.target.value)
-                  }
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Address line 1"
+                value={business.address_line_1 ?? ''}
+                onChange={(value) => updateField('address_line_1', value)}
+              />
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Address line 2
-                <input
-                  value={business.address_line_2 ?? ''}
-                  onChange={(event) =>
-                    updateField('address_line_2', event.target.value)
-                  }
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Address line 2"
+                value={business.address_line_2 ?? ''}
+                onChange={(value) => updateField('address_line_2', value)}
+              />
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Town
-                <input
-                  value={business.town ?? ''}
-                  onChange={(event) => updateField('town', event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Town"
+                value={business.town ?? ''}
+                onChange={(value) => updateField('town', value)}
+              />
 
-              <label className="block text-sm font-semibold text-stone-700">
-                Postcode
-                <input
-                  value={business.postcode ?? ''}
-                  onChange={(event) => updateField('postcode', event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextInput
+                label="Postcode"
+                value={business.postcode ?? ''}
+                onChange={(value) => updateField('postcode', value)}
+              />
 
-              <label className="block text-sm font-semibold text-stone-700 md:col-span-2">
-                Service area
-                <textarea
-                  value={business.service_area ?? ''}
-                  onChange={(event) =>
-                    updateField('service_area', event.target.value)
-                  }
-                  rows={3}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextAreaInput
+                label="Service area"
+                value={business.service_area ?? ''}
+                onChange={(value) => updateField('service_area', value)}
+                rows={3}
+                fullWidth
+              />
 
-              <label className="block text-sm font-semibold text-stone-700 md:col-span-2">
-                Opening times
-                <textarea
-                  value={business.opening_times ?? ''}
-                  onChange={(event) =>
-                    updateField('opening_times', event.target.value)
-                  }
-                  rows={4}
-                  className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                />
-              </label>
+              <TextAreaInput
+                label="Opening times"
+                value={business.opening_times ?? ''}
+                onChange={(value) => updateField('opening_times', value)}
+                rows={4}
+                fullWidth
+              />
             </div>
 
             <div className="mt-6 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 md:grid-cols-2">
@@ -1174,28 +1306,6 @@ export default function ManageBusinessPage() {
               <label className="flex items-center gap-3 text-sm font-semibold text-stone-700">
                 <input
                   type="checkbox"
-                  checked={business.is_featured === true}
-                  onChange={(event) =>
-                    updateField('is_featured', event.target.checked)
-                  }
-                />
-                Featured
-              </label>
-
-              <label className="flex items-center gap-3 text-sm font-semibold text-stone-700">
-                <input
-                  type="checkbox"
-                  checked={business.is_premium === true}
-                  onChange={(event) =>
-                    updateField('is_premium', event.target.checked)
-                  }
-                />
-                Premium business
-              </label>
-
-              <label className="flex items-center gap-3 text-sm font-semibold text-stone-700">
-                <input
-                  type="checkbox"
                   checked={business.use_external_reviews === true}
                   onChange={(event) =>
                     updateField('use_external_reviews', event.target.checked)
@@ -1207,29 +1317,23 @@ export default function ManageBusinessPage() {
 
             {business.use_external_reviews && (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <label className="block text-sm font-semibold text-stone-700">
-                  External review platform
-                  <input
-                    value={business.external_review_platform ?? ''}
-                    onChange={(event) =>
-                      updateField('external_review_platform', event.target.value)
-                    }
-                    className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                    placeholder="Trustpilot, Google, Facebook..."
-                  />
-                </label>
+                <TextInput
+                  label="External review platform"
+                  value={business.external_review_platform ?? ''}
+                  onChange={(value) =>
+                    updateField('external_review_platform', value)
+                  }
+                  placeholder="Trustpilot, Google, Facebook..."
+                />
 
-                <label className="block text-sm font-semibold text-stone-700">
-                  External review URL
-                  <input
-                    value={business.external_review_url ?? ''}
-                    onChange={(event) =>
-                      updateField('external_review_url', event.target.value)
-                    }
-                    className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
-                    placeholder="https://..."
-                  />
-                </label>
+                <TextInput
+                  label="External review URL"
+                  value={business.external_review_url ?? ''}
+                  onChange={(value) =>
+                    updateField('external_review_url', value)
+                  }
+                  placeholder="https://..."
+                />
               </div>
             )}
 
@@ -1246,10 +1350,11 @@ export default function ManageBusinessPage() {
           </section>
 
           <section className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5">
-            <h2 className="text-lg font-bold text-red-800">Danger Zone</h2>
+            <h2 className="text-lg font-bold text-red-800">Danger zone</h2>
 
             <p className="mt-1 text-sm text-red-700">
-              Delete duplicate, test or spam listings. This cannot be undone.
+              Delete duplicate, test or spam business listings. This cannot be
+              undone.
             </p>
 
             <button
@@ -1258,11 +1363,71 @@ export default function ManageBusinessPage() {
               disabled={saving}
               className="mt-4 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
-              Delete Business
+              Delete business
             </button>
           </section>
         </div>
       </section>
     </main>
+  )
+}
+
+function TextInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  fullWidth = false,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  fullWidth?: boolean
+}) {
+  return (
+    <label
+      className={`block text-sm font-semibold text-stone-700 ${
+        fullWidth ? 'md:col-span-2' : ''
+      }`}
+    >
+      {label}
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
+      />
+    </label>
+  )
+}
+
+function TextAreaInput({
+  label,
+  value,
+  onChange,
+  rows,
+  fullWidth = false,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  rows: number
+  fullWidth?: boolean
+}) {
+  return (
+    <label
+      className={`block text-sm font-semibold text-stone-700 ${
+        fullWidth ? 'md:col-span-2' : ''
+      }`}
+    >
+      {label}
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={rows}
+        className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
+      />
+    </label>
   )
 }
