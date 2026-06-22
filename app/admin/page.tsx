@@ -5,524 +5,502 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
-type Listing = {
+type Business = {
   id: string
   business_name: string
+  slug: string
   status: string | null
   is_approved: boolean | null
   is_featured: boolean | null
   is_premium: boolean | null
   listing_type: string | null
   useful_listing_type: string | null
-  created_at: string
+  town: string | null
+  created_at: string | null
+}
+
+type BusinessStat = {
+  event_type: string
 }
 
 type ContactRequest = {
   id: string
   status: string | null
-  created_at: string
 }
 
-function getListingStatus(listing: Listing) {
+type Review = {
+  id: string
+  is_approved: boolean | null
+}
+
+function getListingStatus(listing: Business) {
   if (listing.status === 'rejected') return 'rejected'
   if (listing.status === 'approved') return 'approved'
   if (listing.is_approved === true) return 'approved'
   return 'pending'
 }
 
-function getListingTypeLabel(listing: Listing) {
-  if (listing.listing_type === 'community') {
-    return listing.useful_listing_type || 'Local amenity'
-  }
-
-  return 'Business'
+function isBusinessListing(listing: Business) {
+  return listing.listing_type !== 'community' && listing.listing_type !== 'local_info'
 }
 
-function getManageLink(listing: Listing) {
-  if (listing.listing_type === 'community') {
-    return '/admin/useful-listings'
-  }
+function startOfWeek(date: Date) {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
 
-  return `/admin/businesses/${listing.id}`
+  d.setDate(diff)
+  d.setHours(0, 0, 0, 0)
+
+  return d
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1)
+}
+
+function formatDate(value: string | null) {
+  if (!value) return 'Unknown date'
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(value))
 }
 
 export default function AdminPage() {
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)
-  const [listings, setListings] = useState<Listing[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  const [businesses, setBusinesses] = useState<Business[]>([])
+  const [stats, setStats] = useState<BusinessStat[]>([])
   const [contactRequests, setContactRequests] = useState<ContactRequest[]>([])
-  const [error, setError] = useState('')
+  const [reviews, setReviews] = useState<Review[]>([])
 
   useEffect(() => {
-    async function loadAdminData() {
-      setLoading(true)
-      setError('')
+    loadAdmin()
+  }, [])
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+  async function loadAdmin() {
+    setLoading(true)
 
-      if (!user) {
-        router.push('/')
-        return
-      }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single()
-
-      if (profileError) {
-        setError(profileError.message)
-        setLoading(false)
-        return
-      }
-
-      if (!profile?.is_admin) {
-        router.push('/')
-        return
-      }
-
-      const [listingsResult, contactRequestsResult] = await Promise.all([
-        supabase
-          .from('businesses')
-          .select(
-            `
-            id,
-            business_name,
-            status,
-            is_approved,
-            is_featured,
-            is_premium,
-            listing_type,
-            useful_listing_type,
-            created_at
-          `
-          )
-          .order('created_at', { ascending: false }),
-
-        supabase
-          .from('contact_requests')
-          .select(
-            `
-            id,
-            status,
-            created_at
-          `
-          )
-          .order('created_at', { ascending: false }),
-      ])
-
-      const errors: string[] = []
-
-      if (listingsResult.error) {
-        errors.push(listingsResult.error.message)
-        setListings([])
-      } else {
-        setListings((listingsResult.data || []) as Listing[])
-      }
-
-      if (contactRequestsResult.error) {
-        errors.push(contactRequestsResult.error.message)
-        setContactRequests([])
-      } else {
-        setContactRequests(
-          (contactRequestsResult.data || []) as ContactRequest[]
-        )
-      }
-
-      if (errors.length > 0) {
-        setError(errors.join(' '))
-      }
-
-      setLoading(false)
+    if (!user) {
+      router.push('/login')
+      return
     }
 
-    loadAdminData()
-  }, [router])
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
 
-  const stats = useMemo(() => {
-    const businesses = listings.filter(
-      (listing) => listing.listing_type !== 'community'
+    if (!profile?.is_admin) {
+      router.push('/dashboard')
+      return
+    }
+
+    setIsAdmin(true)
+
+    const [
+      businessesResult,
+      statsResult,
+      contactRequestsResult,
+      reviewsResult,
+    ] = await Promise.all([
+      supabase
+        .from('businesses')
+        .select(
+          'id, business_name, slug, status, is_approved, is_featured, is_premium, listing_type, useful_listing_type, town, created_at'
+        )
+        .order('created_at', { ascending: false }),
+
+      supabase
+        .from('business_stats')
+        .select('event_type'),
+
+      supabase
+        .from('contact_requests')
+        .select('id, status'),
+
+      supabase
+        .from('reviews')
+        .select('id, is_approved'),
+    ])
+
+    if (businessesResult.data) setBusinesses(businessesResult.data)
+    if (statsResult.data) setStats(statsResult.data)
+    if (contactRequestsResult.data) setContactRequests(contactRequestsResult.data)
+    if (reviewsResult.data) setReviews(reviewsResult.data)
+
+    setLoading(false)
+  }
+
+  const adminStats = useMemo(() => {
+    const now = new Date()
+    const weekStart = startOfWeek(now)
+    const monthStart = startOfMonth(now)
+
+    const businessListings = businesses.filter(isBusinessListing)
+
+    const pendingBusinesses = businessListings.filter(
+      (business) => getListingStatus(business) === 'pending'
     )
 
-    const localAmenities = listings.filter(
-      (listing) => listing.listing_type === 'community'
+    const approvedBusinesses = businessListings.filter(
+      (business) => getListingStatus(business) === 'approved'
     )
 
-    const pendingBusinesses = businesses.filter(
-      (listing) => getListingStatus(listing) === 'pending'
+    const rejectedBusinesses = businessListings.filter(
+      (business) => getListingStatus(business) === 'rejected'
     )
 
-    const pendingAmenities = localAmenities.filter(
-      (listing) => getListingStatus(listing) === 'pending'
-    )
+    const signedUpThisWeek = businessListings.filter((business) => {
+      if (!business.created_at) return false
+      return new Date(business.created_at) >= weekStart
+    })
 
-    const approved = listings.filter(
-      (listing) => getListingStatus(listing) === 'approved'
-    )
+    const signedUpThisMonth = businessListings.filter((business) => {
+      if (!business.created_at) return false
+      return new Date(business.created_at) >= monthStart
+    })
 
-    const rejected = listings.filter(
-      (listing) => getListingStatus(listing) === 'rejected'
-    )
-
-    const featured = listings.filter(
-      (listing) => listing.is_featured === true
-    )
-
-    const premium = listings.filter(
-      (listing) => listing.is_premium === true
-    )
+    const countStat = (eventType: string) =>
+      stats.filter((stat) => stat.event_type === eventType).length
 
     const newContactRequests = contactRequests.filter(
       (request) => request.status === 'new' || !request.status
     )
 
-    return {
-      total: listings.length,
-      businesses: businesses.length,
-      localAmenities: localAmenities.length,
-      pendingBusinesses: pendingBusinesses.length,
-      pendingAmenities: pendingAmenities.length,
-      approved: approved.length,
-      rejected: rejected.length,
-      featured: featured.length,
-      premium: premium.length,
-      contactRequests: contactRequests.length,
-      newContactRequests: newContactRequests.length,
-    }
-  }, [listings, contactRequests])
+    const pendingReviews = reviews.filter(
+      (review) => review.is_approved !== true
+    )
 
-  const recentListings = listings.slice(0, 8)
+    return {
+      businessListings,
+      pendingBusinesses,
+      approvedBusinesses,
+      rejectedBusinesses,
+      signedUpThisWeek,
+      signedUpThisMonth,
+      newContactRequests,
+      pendingReviews,
+      profileViews: countStat('profile_view'),
+      websiteClicks: countStat('website_click'),
+      phoneClicks: countStat('phone_click'),
+      emailClicks: countStat('email_click'),
+      facebookClicks: countStat('facebook_click'),
+      instagramClicks: countStat('instagram_click'),
+    }
+  }, [businesses, stats, contactRequests, reviews])
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
-        <section className="mx-auto max-w-6xl">
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
-            Loading admin dashboard...
-          </div>
-        </section>
+      <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-sm text-stone-600">Loading admin centre...</p>
+        </div>
       </main>
     )
   }
 
+  if (!isAdmin) {
+    return null
+  }
+
   return (
-    <main className="min-h-screen bg-stone-100 px-4 py-10 text-stone-900">
-      <section className="mx-auto max-w-6xl space-y-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
+      <div className="mx-auto max-w-6xl space-y-8">
+        <header className="flex flex-col gap-4 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
-              Ollerton Hub
+            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
+              Admin centre
             </p>
-
-            <h1 className="text-3xl font-bold text-stone-950">
-              Admin dashboard
+            <h1 className="mt-2 text-3xl font-bold text-stone-950">
+              Ollerton Hub admin
             </h1>
-
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
-              Manage business submissions, local amenities, useful community
-              listings, reviews, contact requests, featured visibility and
-              premium options.
+            <p className="mt-2 max-w-2xl text-sm text-stone-600">
+              Review new businesses, check site activity and manage the main
+              admin areas from one place.
             </p>
           </div>
 
           <Link
             href="/"
-            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-800 shadow-sm hover:bg-stone-50"
+            className="inline-flex rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-800 transition hover:bg-stone-100"
           >
-            View public site
+            Return to the hub
           </Link>
-        </div>
+        </header>
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">
-            {error}
-          </div>
-        ) : null}
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Total listings" value={stats.total} />
-          <StatCard label="Businesses" value={stats.businesses} />
-          <StatCard label="Local amenities" value={stats.localAmenities} />
-          <StatCard label="Pending businesses" value={stats.pendingBusinesses} />
-          <StatCard label="Pending amenities" value={stats.pendingAmenities} />
-          <StatCard label="Approved" value={stats.approved} />
-          <StatCard label="Rejected" value={stats.rejected} />
-          <StatCard label="Featured" value={stats.featured} />
-          <StatCard label="Premium" value={stats.premium} />
-          <StatCard label="Contact requests" value={stats.contactRequests} />
-          <StatCard label="New requests" value={stats.newContactRequests} />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <AdminActionCard
-            href="/admin/businesses"
-            eyebrow="Business directory"
-            title="Manage businesses"
-            description="Approve, reject, feature, delete and manage premium business listings."
-          />
-
-          <AdminActionCard
-            href="/admin/useful-listings"
-            eyebrow="Local amenities"
-            title="Manage useful listings"
-            description="Add and manage places of worship, schools, recycling centres, council services, community venues and public information."
-          />
-
-          <AdminActionCard
-            href="/admin/contact-requests"
-            eyebrow="Contact centre"
-            title="View contact requests"
-            description="Review subscription enquiries, advert enquiries, listing reports and general contact form messages."
-          />
-
-          <AdminActionCard
-            href="/admin/reviews"
-            eyebrow="Moderation"
-            title="Manage reviews"
-            description="Check pending reviews and decide what should appear on public business profiles."
-          />
-
-          <AdminActionCard
-            href="/admin/settings"
-            eyebrow="Site content"
-            title="Site settings"
-            description="Update homepage text, directory messaging and other editable site content."
-          />
-        </div>
-
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <section className="rounded-3xl border-2 border-amber-300 bg-amber-50 p-6 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h2 className="text-xl font-bold text-stone-950">
-                Recent listings
+              <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">
+                Needs attention
+              </p>
+              <h2 className="mt-1 text-2xl font-bold text-stone-950">
+                Pending businesses
               </h2>
-
-              <p className="mt-1 text-sm text-stone-600">
-                Latest businesses and local amenities added to Ollerton Hub.
+              <p className="mt-2 text-sm text-stone-700">
+                These are business listings waiting for approval. Local
+                amenities are not shown here because they are admin-entered.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/admin/businesses"
-                className="text-sm font-bold text-red-700 hover:underline"
-              >
-                Businesses
-              </Link>
-
-              <Link
-                href="/admin/useful-listings"
-                className="text-sm font-bold text-red-700 hover:underline"
-              >
-                Local amenities
-              </Link>
-
-              <Link
-                href="/admin/contact-requests"
-                className="text-sm font-bold text-red-700 hover:underline"
-              >
-                Contact requests
-              </Link>
+            <div className="rounded-2xl bg-white px-5 py-4 text-center shadow-sm">
+              <p className="text-4xl font-bold text-amber-700">
+                {adminStats.pendingBusinesses.length}
+              </p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                Waiting
+              </p>
             </div>
           </div>
 
-          <div className="mt-5 space-y-3">
-            {recentListings.length === 0 ? (
-              <p className="rounded-2xl bg-stone-50 p-4 text-sm text-stone-600">
-                No listings have been added yet.
-              </p>
-            ) : (
-              recentListings.map((listing) => {
-                const status = getListingStatus(listing)
-                const isAmenity = listing.listing_type === 'community'
-
-                return (
-                  <div
-                    key={listing.id}
-                    className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
+          {adminStats.pendingBusinesses.length === 0 ? (
+            <div className="mt-6 rounded-2xl bg-white p-5 text-sm text-stone-600 shadow-sm">
+              No pending businesses at the moment.
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              {adminStats.pendingBusinesses.slice(0, 6).map((business) => (
+                <article
+                  key={business.id}
+                  className="rounded-2xl bg-white p-5 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-4">
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-bold text-stone-950">
-                          {listing.business_name}
-                        </p>
+                      <h3 className="text-lg font-bold text-stone-950">
+                        {business.business_name}
+                      </h3>
 
-                        <span
-                          className={
-                            isAmenity
-                              ? 'rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800'
-                              : 'rounded-full bg-stone-200 px-3 py-1 text-xs font-bold text-stone-700'
-                          }
-                        >
-                          {getListingTypeLabel(listing)}
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-800">
+                          Pending
                         </span>
 
-                        <StatusBadge status={status} />
+                        {business.is_premium && (
+                          <span className="rounded-full bg-stone-900 px-3 py-1 font-semibold text-white">
+                            Premium
+                          </span>
+                        )}
+
+                        {business.is_featured && (
+                          <span className="rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-800">
+                            Featured
+                          </span>
+                        )}
                       </div>
 
-                      <p className="mt-1 text-sm text-stone-600">
-                        Added{' '}
-                        {new Date(listing.created_at).toLocaleDateString(
-                          'en-GB'
-                        )}
+                      <p className="mt-3 text-sm text-stone-600">
+                        {business.town || 'No town added'} · Submitted{' '}
+                        {formatDate(business.created_at)}
                       </p>
                     </div>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Link
+                      href={`/admin/businesses/${business.id}`}
+                      className="rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800"
+                    >
+                      Review listing
+                    </Link>
 
                     <Link
-                      href={getManageLink(listing)}
-                      className="rounded-full bg-stone-900 px-4 py-2 text-center text-sm font-bold text-white hover:bg-red-800"
+                      href={`/business/${business.slug}`}
+                      className="rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-800 transition hover:bg-stone-100"
                     >
-                      Manage
+                      View public page
                     </Link>
                   </div>
-                )
-              })
-            )}
+                </article>
+              ))}
+            </div>
+          )}
+
+          {adminStats.pendingBusinesses.length > 6 && (
+            <div className="mt-5">
+              <Link
+                href="/admin/businesses?status=pending"
+                className="text-sm font-semibold text-amber-800 underline underline-offset-4"
+              >
+                View all pending businesses
+              </Link>
+            </div>
+          )}
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <AdminStatCard
+            label="Signed up this week"
+            value={adminStats.signedUpThisWeek.length}
+          />
+          <AdminStatCard
+            label="Signed up this month"
+            value={adminStats.signedUpThisMonth.length}
+          />
+          <AdminStatCard
+            label="Total businesses"
+            value={adminStats.businessListings.length}
+          />
+          <AdminStatCard
+            label="Approved businesses"
+            value={adminStats.approvedBusinesses.length}
+          />
+        </section>
+
+        <section className="rounded-3xl bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-stone-950">
+                Platform activity
+              </h2>
+              <p className="mt-1 text-sm text-stone-600">
+                Combined activity across all business listings.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <AdminStatCard
+              label="Profile views"
+              value={adminStats.profileViews}
+              subtle
+            />
+            <AdminStatCard
+              label="Website clicks"
+              value={adminStats.websiteClicks}
+              subtle
+            />
+            <AdminStatCard
+              label="Phone / call clicks"
+              value={adminStats.phoneClicks}
+              subtle
+            />
+            <AdminStatCard
+              label="Email clicks"
+              value={adminStats.emailClicks}
+              subtle
+            />
+            <AdminStatCard
+              label="Facebook clicks"
+              value={adminStats.facebookClicks}
+              subtle
+            />
+            <AdminStatCard
+              label="Instagram clicks"
+              value={adminStats.instagramClicks}
+              subtle
+            />
           </div>
         </section>
-      </section>
+
+        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <AdminActionCard
+            title="Manage businesses"
+            description="Approve, reject, feature, upgrade or edit business listings."
+            href="/admin/businesses"
+            badge={`${adminStats.pendingBusinesses.length} pending`}
+          />
+
+          <AdminActionCard
+            title="Reviews"
+            description="Approve or manage customer reviews left on business profiles."
+            href="/admin/reviews"
+            badge={`${adminStats.pendingReviews.length} pending`}
+          />
+
+          <AdminActionCard
+            title="Contact requests"
+            description="View subscription, advert, listing report and general enquiries."
+            href="/admin/contact-requests"
+            badge={`${adminStats.newContactRequests.length} new`}
+          />
+
+          <AdminActionCard
+            title="Site settings"
+            description="Update homepage text, contact details and general site settings."
+            href="/admin/settings"
+          />
+
+          <AdminActionCard
+            title="Directory"
+            description="Check how businesses and local information appear publicly."
+            href="/directory"
+          />
+
+          <AdminActionCard
+            title="Add useful local info"
+            description="Add schools, places of worship, council services and other amenities."
+            href="/dashboard/business"
+          />
+        </section>
+      </div>
     </main>
   )
 }
 
-function AdminActionCard({
-  href,
-  eyebrow,
-  title,
-  description,
+function AdminStatCard({
+  label,
+  value,
+  subtle = false,
 }: {
-  href: string
-  eyebrow: string
-  title: string
-  description: string
+  label: string
+  value: number
+  subtle?: boolean
 }) {
   return (
-    <Link
-      href={href}
-      className="rounded-3xl bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-    >
-      <p className="text-sm font-semibold uppercase tracking-wide text-red-700">
-        {eyebrow}
-      </p>
-
-      <h2 className="mt-2 text-xl font-bold text-stone-950">{title}</h2>
-
-      <p className="mt-2 text-sm leading-6 text-stone-700">{description}</p>
-    </Link>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  const styles: Record<
-    string,
-    {
-      border: string
-      text: string
-      value: string
-      bg: string
-    }
-  > = {
-    'Total listings': {
-      border: 'border-stone-200',
-      text: 'text-stone-700',
-      value: 'text-stone-950',
-      bg: 'bg-white',
-    },
-    Businesses: {
-      border: 'border-blue-200',
-      text: 'text-blue-700',
-      value: 'text-blue-900',
-      bg: 'bg-blue-50',
-    },
-    'Local amenities': {
-      border: 'border-red-200',
-      text: 'text-red-700',
-      value: 'text-red-900',
-      bg: 'bg-red-50',
-    },
-    'Pending businesses': {
-      border: 'border-amber-200',
-      text: 'text-amber-700',
-      value: 'text-amber-900',
-      bg: 'bg-amber-50',
-    },
-    'Pending amenities': {
-      border: 'border-orange-200',
-      text: 'text-orange-700',
-      value: 'text-orange-900',
-      bg: 'bg-orange-50',
-    },
-    Approved: {
-      border: 'border-green-200',
-      text: 'text-green-700',
-      value: 'text-green-900',
-      bg: 'bg-green-50',
-    },
-    Rejected: {
-      border: 'border-red-200',
-      text: 'text-red-700',
-      value: 'text-red-900',
-      bg: 'bg-red-50',
-    },
-    Featured: {
-      border: 'border-purple-200',
-      text: 'text-purple-700',
-      value: 'text-purple-900',
-      bg: 'bg-purple-50',
-    },
-    Premium: {
-      border: 'border-indigo-200',
-      text: 'text-indigo-700',
-      value: 'text-indigo-900',
-      bg: 'bg-indigo-50',
-    },
-    'Contact requests': {
-      border: 'border-cyan-200',
-      text: 'text-cyan-700',
-      value: 'text-cyan-900',
-      bg: 'bg-cyan-50',
-    },
-    'New requests': {
-      border: 'border-rose-200',
-      text: 'text-rose-700',
-      value: 'text-rose-900',
-      bg: 'bg-rose-50',
-    },
-  }
-
-  const style = styles[label] || styles['Total listings']
-
-  return (
     <div
-      className={`rounded-2xl border ${style.border} ${style.bg} px-5 py-4 shadow-sm`}
+      className={`rounded-2xl p-5 shadow-sm ${
+        subtle ? 'bg-stone-50' : 'bg-white'
+      }`}
     >
-      <p className={`text-xs font-bold uppercase tracking-wide ${style.text}`}>
-        {label}
-      </p>
-
-      <p className={`mt-2 text-3xl font-bold ${style.value}`}>{value}</p>
+      <p className="text-3xl font-bold text-stone-950">{value}</p>
+      <p className="mt-1 text-sm font-medium text-stone-600">{label}</p>
     </div>
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    pending: 'bg-amber-100 text-amber-800',
-    approved: 'bg-green-100 text-green-800',
-    rejected: 'bg-red-100 text-red-800',
-  }
-
+function AdminActionCard({
+  title,
+  description,
+  href,
+  badge,
+}: {
+  title: string
+  description: string
+  href: string
+  badge?: string
+}) {
   return (
-    <span
-      className={`rounded-full px-3 py-1 text-xs font-bold ${
-        styles[status] || styles.pending
-      }`}
+    <Link
+      href={href}
+      className="group rounded-3xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
-      {status}
-    </span>
+      <div className="flex items-start justify-between gap-4">
+        <h2 className="text-lg font-bold text-stone-950">{title}</h2>
+
+        {badge && (
+          <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
+            {badge}
+          </span>
+        )}
+      </div>
+
+      <p className="mt-3 text-sm leading-6 text-stone-600">{description}</p>
+
+      <p className="mt-5 text-sm font-semibold text-emerald-700 group-hover:underline">
+        Open
+      </p>
+    </Link>
   )
 }
