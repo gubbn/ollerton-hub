@@ -34,8 +34,8 @@ export default function Footer() {
                   Create a business listing
                 </Link>
 
-                <Link href="/dashboard" className="hover:text-red-600">
-                  Edit your business page
+                <Link href="/faq" className="hover:text-red-600">
+                  FAQs
                 </Link>
 
                 <Link href="/login" className="hover:text-red-600">
