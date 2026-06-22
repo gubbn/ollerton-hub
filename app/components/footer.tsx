@@ -28,7 +28,7 @@ export default function Footer() {
 
               <div className="flex flex-col gap-2 text-sm text-stone-600">
                 <Link
-                  href="/register"
+                  href="/dashboard/business"
                   className="font-semibold text-red-600 hover:underline"
                 >
                   Create a business listing
@@ -36,6 +36,14 @@ export default function Footer() {
 
                 <Link href="/login" className="hover:text-red-600">
                   Business login
+                </Link>
+
+                <Link href="/contact?topic=premium-listing" className="hover:text-red-600">
+                  Premium listings
+                </Link>
+
+                <Link href="/contact?topic=advertising" className="hover:text-red-600">
+                  Advertise with us
                 </Link>
               </div>
             </div>
@@ -60,6 +68,10 @@ export default function Footer() {
 
                 <Link href="/contact" className="hover:text-red-600">
                   Contact
+                </Link>
+
+                <Link href="/contact?topic=local-info" className="hover:text-red-600">
+                  Suggest local info
                 </Link>
 
                 <Link href="/terms" className="hover:text-red-600">
