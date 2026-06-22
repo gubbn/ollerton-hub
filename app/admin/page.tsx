@@ -122,22 +122,18 @@ export default function AdminPage() {
         )
         .order('created_at', { ascending: false }),
 
-      supabase
-        .from('business_stats')
-        .select('event_type'),
+      supabase.from('business_stats').select('event_type'),
 
-      supabase
-        .from('contact_requests')
-        .select('id, status'),
+      supabase.from('contact_requests').select('id, status'),
 
-      supabase
-        .from('reviews')
-        .select('id, is_approved'),
+      supabase.from('reviews').select('id, is_approved'),
     ])
 
     if (businessesResult.data) setBusinesses(businessesResult.data)
     if (statsResult.data) setStats(statsResult.data)
-    if (contactRequestsResult.data) setContactRequests(contactRequestsResult.data)
+    if (contactRequestsResult.data) {
+      setContactRequests(contactRequestsResult.data)
+    }
     if (reviewsResult.data) setReviews(reviewsResult.data)
 
     setLoading(false)
@@ -358,52 +354,6 @@ export default function AdminPage() {
           />
         </section>
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-stone-950">
-                Platform activity
-              </h2>
-              <p className="mt-1 text-sm text-stone-600">
-                Combined activity across all business listings.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <AdminStatCard
-              label="Profile views"
-              value={adminStats.profileViews}
-              subtle
-            />
-            <AdminStatCard
-              label="Website clicks"
-              value={adminStats.websiteClicks}
-              subtle
-            />
-            <AdminStatCard
-              label="Phone / call clicks"
-              value={adminStats.phoneClicks}
-              subtle
-            />
-            <AdminStatCard
-              label="Email clicks"
-              value={adminStats.emailClicks}
-              subtle
-            />
-            <AdminStatCard
-              label="Facebook clicks"
-              value={adminStats.facebookClicks}
-              subtle
-            />
-            <AdminStatCard
-              label="Instagram clicks"
-              value={adminStats.instagramClicks}
-              subtle
-            />
-          </div>
-        </section>
-
         <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <AdminActionCard
             title="Manage businesses"
@@ -444,6 +394,38 @@ export default function AdminPage() {
             href="/dashboard/business"
           />
         </section>
+
+        <section className="rounded-3xl bg-white p-5 shadow-sm">
+          <div>
+            <h2 className="text-lg font-bold text-stone-950">
+              Platform activity
+            </h2>
+            <p className="mt-1 text-xs text-stone-500">
+              Combined activity across all business listings.
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            <MiniStatCard
+              label="Profile views"
+              value={adminStats.profileViews}
+            />
+            <MiniStatCard
+              label="Website clicks"
+              value={adminStats.websiteClicks}
+            />
+            <MiniStatCard label="Calls" value={adminStats.phoneClicks} />
+            <MiniStatCard
+              label="Email clicks"
+              value={adminStats.emailClicks}
+            />
+            <MiniStatCard label="Facebook" value={adminStats.facebookClicks} />
+            <MiniStatCard
+              label="Instagram"
+              value={adminStats.instagramClicks}
+            />
+          </div>
+        </section>
       </div>
     </main>
   )
@@ -452,20 +434,29 @@ export default function AdminPage() {
 function AdminStatCard({
   label,
   value,
-  subtle = false,
 }: {
   label: string
   value: number
-  subtle?: boolean
 }) {
   return (
-    <div
-      className={`rounded-2xl p-5 shadow-sm ${
-        subtle ? 'bg-stone-50' : 'bg-white'
-      }`}
-    >
+    <div className="rounded-2xl bg-white p-5 shadow-sm">
       <p className="text-3xl font-bold text-stone-950">{value}</p>
       <p className="mt-1 text-sm font-medium text-stone-600">{label}</p>
+    </div>
+  )
+}
+
+function MiniStatCard({
+  label,
+  value,
+}: {
+  label: string
+  value: number
+}) {
+  return (
+    <div className="rounded-2xl bg-stone-50 px-4 py-3">
+      <p className="text-xl font-bold text-stone-950">{value}</p>
+      <p className="mt-0.5 text-xs font-medium text-stone-500">{label}</p>
     </div>
   )
 }
