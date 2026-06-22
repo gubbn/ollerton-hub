@@ -389,10 +389,10 @@ export default function AdminPage() {
           />
 
           <AdminActionCard
-            title="Add useful local info"
-            description="Add schools, places of worship, council services and other amenities."
-            href="/dashboard/business"
-          />
+  title="Local amenities"
+  description="Add and amend schools, places of worship, council services and other useful local information."
+  href="/admin/amenities"
+/>
         </section>
 
         <section className="rounded-3xl bg-white p-5 shadow-sm">
