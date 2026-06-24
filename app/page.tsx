@@ -76,22 +76,22 @@ function sortByBusinessName(a: Business, b: Business) {
 
 function HomepageSquareAdvert() {
   return (
-    <aside className="mx-auto w-full max-w-sm lg:max-w-none">
+    <aside className="mx-auto w-full max-w-[340px] lg:mx-0">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-300">
+        Advertisement
+      </p>
+
       <Link
         href="/register"
-        className="group relative block aspect-square overflow-hidden rounded-3xl bg-stone-100 shadow-sm ring-1 ring-white/20"
+        className="group block aspect-square w-full overflow-hidden rounded-3xl bg-stone-100 shadow-sm ring-1 ring-white/20"
         aria-label="Promote your business on Ollerton Hub"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/adverts/homepage-square-ollerton-hub.webp"
+          src="/media/homepage-square-ollerton-hub.png"
           alt="Promote your business on Ollerton Hub"
-          className="h-full w-full object-cover transition group-hover:scale-105"
+          className="block h-full w-full object-cover transition group-hover:scale-105"
         />
-
-        <div className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-stone-700 shadow-sm">
-          Advertisement
-        </div>
       </Link>
     </aside>
   )
