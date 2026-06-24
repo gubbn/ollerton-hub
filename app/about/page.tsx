@@ -94,9 +94,8 @@ export default function AboutPage() {
               'Extra visibility outside the main directory',
               'More space for your business description and services',
               'Useful for businesses that want more local attention',
-              'Directory order still remains alphabetical',
-            ]}
-            bestFor="Best for businesses that want more visibility without making the directory unfair."
+                          ]}
+            bestFor="Best for businesses that want more visibility."
             href="/contact?topic=featured-listing"
             buttonText="Ask about Featured"
           />
