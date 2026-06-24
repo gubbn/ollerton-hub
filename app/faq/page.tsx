@@ -12,7 +12,7 @@ const faqs = [
       'You can add your business by creating an account and submitting your listing. Once submitted, it will be reviewed before appearing publicly on the directory.',
   },
   {
-    question: 'What do you mean by "surrounding villages">',
+    question: 'What do you mean by "surrounding villages"?',
     answer:  'Villages up to a 10 mile radius of Ollerton, Nottinghamshire can list their business with Ollerton Hub.',
   },
   {
@@ -30,12 +30,7 @@ const faqs = [
     answer:
       'Yes. You can log in to your dashboard and update your business details. Some changes may need to be checked again before they appear publicly.',
   },
-  {
-    question: 'What is the difference between Free, Featured and Premium listings?',
-    answer:
-      'Free listings provide a simple directory presence. Featured listings get extra visibility in selected areas of the site. Premium listings offer the highest level of visibility and more room to describe your business.',
-  },
-  {
+    {
     question: 'Can charities, schools or local amenities be listed?',
     answer:
       'Yes. Ollerton Hub also includes useful local information such as schools, places of worship, council services and other community amenities. These are usually added by the site admin rather than through the standard business sign-up process.',

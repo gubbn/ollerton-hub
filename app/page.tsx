@@ -26,7 +26,6 @@ type Business = {
   status: string | null
   is_approved: boolean | null
   is_featured: boolean | null
-  is_premium: boolean | null
   listing_type: string | null
   useful_listing_type: string | null
   categories: CategoryRelation
@@ -82,14 +81,14 @@ function HomepageSquareAdvert() {
       </p>
 
       <Link
-        href="/register"
+        href="/contact?topic=advert-enquiry"
         className="group block aspect-square w-full overflow-hidden rounded-3xl bg-stone-100 shadow-sm ring-1 ring-white/20"
-        aria-label="Promote your business on Ollerton Hub"
+        aria-label="Advertise your business on Ollerton Hub"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/media/homepage-square-ollerton-hub.png"
-          alt="Promote your business on Ollerton Hub"
+          alt="Advertise your business on Ollerton Hub"
           className="block h-full w-full object-cover transition group-hover:scale-105"
         />
       </Link>
@@ -97,7 +96,7 @@ function HomepageSquareAdvert() {
   )
 }
 
-function PromotedBusinessCard({ business }: { business: Business }) {
+function FeaturedBusinessCard({ business }: { business: Business }) {
   return (
     <Link
       href={`/business/${business.slug}`}
@@ -122,7 +121,6 @@ function PromotedBusinessCard({ business }: { business: Business }) {
 
           <ListingBadges
             isFeatured={business.is_featured}
-            isPremium={business.is_premium}
             listingType={business.listing_type}
             usefulListingType={business.useful_listing_type}
             className="mt-1.5"
@@ -182,7 +180,6 @@ export default async function HomePage() {
           status,
           is_approved,
           is_featured,
-          is_premium,
           listing_type,
           useful_listing_type,
           categories (
@@ -204,18 +201,10 @@ export default async function HomePage() {
     .filter((business) => isApprovedBusiness(business))
     .filter((business) => !isCommunityListing(business))
 
-  const premiumBusinesses = approvedBusinesses
-    .filter((business) => business.is_premium === true)
-    .sort(sortByBusinessName)
-    .slice(0, 5)
-
   const featuredBusinesses = approvedBusinesses
-    .filter(
-      (business) =>
-        business.is_featured === true && business.is_premium !== true
-    )
+    .filter((business) => business.is_featured === true)
     .sort(sortByBusinessName)
-    .slice(0, 5)
+    .slice(0, 10)
 
   const heroTitle = getSetting(settings, 'homepage_title', 'Ollerton Hub')
 
@@ -344,7 +333,7 @@ export default async function HomePage() {
           <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-center">
             <div>
               <h2 className="text-2xl font-bold text-stone-950">
-                Are you a local business or community organisation?
+                Are you a local business?
               </h2>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
@@ -353,75 +342,27 @@ export default async function HomePage() {
               </p>
 
               <p className="mt-2 text-sm leading-6 text-stone-500">
-                The main directory stays alphabetical. Featured and Premium
-                listings get extra homepage visibility without changing the
-                directory order.
+                Want extra visibility? Upgrade to a Featured listing, or enquire
+                separately about advertising space on Ollerton Hub.
               </p>
             </div>
 
-            <Link
-              href="/register"
-              className="inline-flex justify-center rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
-            >
-              Create or edit listing
-            </Link>
-          </div>
-        </section>
-
-        <section>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-                Premium listings
-              </p>
-
-              <h2 className="mt-1 text-2xl font-bold text-stone-950">
-                Premium local businesses
-              </h2>
-
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-                Extra visibility for local businesses that want to stand out on
-                Ollerton Hub.
-              </p>
-            </div>
-
-            <Link
-              href="/contact?topic=premium-listing"
-              className="text-sm font-semibold text-red-700 hover:underline"
-            >
-              Ask about Premium →
-            </Link>
-          </div>
-
-          {premiumBusinesses.length > 0 ? (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {premiumBusinesses.map((business) => (
-                <PromotedBusinessCard key={business.id} business={business} />
-              ))}
-            </div>
-          ) : (
-            <div className="mt-5 rounded-3xl border border-dashed border-stone-300 bg-white p-6 text-center shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-                Space reserved
-              </p>
-
-              <h3 className="mt-2 text-xl font-bold text-stone-950">
-                Premium listings will appear here
-              </h3>
-
-              <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-                This section is reserved for businesses that choose the Premium
-                listing option.
-              </p>
+            <div className="flex flex-wrap gap-3 md:justify-end">
+              <Link
+                href="/register"
+                className="inline-flex justify-center rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
+              >
+                Create or edit listing
+              </Link>
 
               <Link
-                href="/contact?topic=premium-listing"
-                className="mt-5 inline-flex rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800"
+                href="/contact?topic=advert-enquiry"
+                className="inline-flex justify-center rounded-xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white hover:bg-stone-800"
               >
-                Ask about Premium
+                Ask about advertising
               </Link>
             </div>
-          )}
+          </div>
         </section>
 
         <section>
@@ -436,8 +377,8 @@ export default async function HomePage() {
               </h2>
 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-                A small homepage boost for local businesses that want more
-                visibility.
+                Featured listings give local businesses extra homepage
+                visibility while the main directory stays fair and alphabetical.
               </p>
             </div>
 
@@ -452,7 +393,7 @@ export default async function HomePage() {
           {featuredBusinesses.length > 0 ? (
             <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {featuredBusinesses.map((business) => (
-                <PromotedBusinessCard key={business.id} business={business} />
+                <FeaturedBusinessCard key={business.id} business={business} />
               ))}
             </div>
           ) : (
@@ -466,8 +407,8 @@ export default async function HomePage() {
               </h3>
 
               <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-                This section is reserved for businesses that choose the Featured
-                listing option.
+                This section is reserved for local businesses that choose the
+                Featured listing option.
               </p>
 
               <Link

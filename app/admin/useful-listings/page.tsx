@@ -25,10 +25,10 @@ type UsefulListing = {
   service_area: string | null
   opening_times: string | null
   category_id: string | null
+  listing_type: string | null
   useful_listing_type: string | null
   is_approved: boolean | null
   is_featured: boolean | null
-  is_premium: boolean | null
   status: string | null
   created_at: string
 }
@@ -100,12 +100,25 @@ function ensureWebsiteUrl(value: string) {
   return `https://${trimmed}`
 }
 
+function cleanText(value: string) {
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   })
+}
+
+function isUsefulListing(listing: UsefulListing) {
+  return (
+    listing.listing_type === 'community' ||
+    listing.listing_type === 'local_info' ||
+    !!listing.useful_listing_type
+  )
 }
 
 export default function UsefulListingsAdminPage() {
@@ -161,7 +174,14 @@ export default function UsefulListingsAdminPage() {
 
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser()
+
+    if (userError) {
+      setError(userError.message)
+      setLoading(false)
+      return
+    }
 
     if (!user) {
       router.push('/login')
@@ -222,15 +242,14 @@ export default function UsefulListingsAdminPage() {
         service_area,
         opening_times,
         category_id,
+        listing_type,
         useful_listing_type,
         is_approved,
         is_featured,
-        is_premium,
         status,
         created_at
       `
       )
-      .eq('listing_type', 'community')
       .order('business_name', { ascending: true })
 
     if (listingError) {
@@ -239,7 +258,11 @@ export default function UsefulListingsAdminPage() {
       return
     }
 
-    setListings((data ?? []) as UsefulListing[])
+    const usefulListings = ((data ?? []) as UsefulListing[]).filter(
+      isUsefulListing
+    )
+
+    setListings(usefulListings)
   }
 
   function updateField(field: keyof UsefulListingForm, value: string) {
@@ -305,7 +328,14 @@ export default function UsefulListingsAdminPage() {
 
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser()
+
+    if (userError) {
+      setError(userError.message)
+      setSaving(false)
+      return
+    }
 
     if (!user) {
       setError('You need to be logged in to add a useful listing.')
@@ -322,20 +352,23 @@ export default function UsefulListingsAdminPage() {
       listing_type: 'community',
       useful_listing_type: form.useful_listing_type || 'Local information',
       category_id: form.category_id || null,
-      description: form.description.trim() || null,
-      phone: form.phone.trim() || null,
-      email: form.email.trim() || null,
+      description: cleanText(form.description),
+      phone: cleanText(form.phone),
+      email: cleanText(form.email),
       website: ensureWebsiteUrl(form.website),
-      address_line_1: form.address_line_1.trim() || null,
-      address_line_2: form.address_line_2.trim() || null,
-      town: form.town.trim() || null,
-      postcode: form.postcode.trim() || null,
-      service_area: form.service_area.trim() || null,
-      opening_times: form.opening_times.trim() || null,
+      address_line_1: cleanText(form.address_line_1),
+      address_line_2: cleanText(form.address_line_2),
+      town: cleanText(form.town),
+      postcode: cleanText(form.postcode),
+      service_area: cleanText(form.service_area),
+      opening_times: cleanText(form.opening_times),
       is_approved: true,
       status: 'approved',
       is_featured: false,
-      is_premium: false,
+      paid_tier: 'free',
+      paid_tier_started_at: null,
+      paid_tier_expires_at: null,
+      paid_tier_renewed_at: null,
     })
 
     if (insertError) {
@@ -366,25 +399,29 @@ export default function UsefulListingsAdminPage() {
       .update({
         business_name: editForm.business_name.trim(),
         listing_type: 'community',
-        useful_listing_type: editForm.useful_listing_type || 'Local information',
+        useful_listing_type:
+          editForm.useful_listing_type || 'Local information',
         category_id: editForm.category_id || null,
-        description: editForm.description.trim() || null,
-        phone: editForm.phone.trim() || null,
-        email: editForm.email.trim() || null,
+        description: cleanText(editForm.description),
+        phone: cleanText(editForm.phone),
+        email: cleanText(editForm.email),
         website: ensureWebsiteUrl(editForm.website),
-        address_line_1: editForm.address_line_1.trim() || null,
-        address_line_2: editForm.address_line_2.trim() || null,
-        town: editForm.town.trim() || null,
-        postcode: editForm.postcode.trim() || null,
-        service_area: editForm.service_area.trim() || null,
-        opening_times: editForm.opening_times.trim() || null,
+        address_line_1: cleanText(editForm.address_line_1),
+        address_line_2: cleanText(editForm.address_line_2),
+        town: cleanText(editForm.town),
+        postcode: cleanText(editForm.postcode),
+        service_area: cleanText(editForm.service_area),
+        opening_times: cleanText(editForm.opening_times),
         is_approved: true,
         status: 'approved',
         is_featured: false,
-        is_premium: false,
+        paid_tier: 'free',
+        paid_tier_started_at: null,
+        paid_tier_expires_at: null,
+        paid_tier_renewed_at: null,
       })
       .eq('id', id)
-      .select('id, listing_type, is_approved, status, is_featured, is_premium')
+      .select('id, listing_type, is_approved, status, is_featured, paid_tier')
       .single()
 
     if (updateError) {
@@ -398,10 +435,10 @@ export default function UsefulListingsAdminPage() {
       data?.is_approved !== true ||
       data?.status !== 'approved' ||
       data?.is_featured !== false ||
-      data?.is_premium !== false
+      data?.paid_tier !== 'free'
     ) {
       setError(
-        'The listing was saved, but the community listing rules were not applied. Please check the database fields.'
+        'The listing was saved, but the useful listing rules were not applied. Please check the database fields.'
       )
       setSaving(false)
       return
@@ -487,7 +524,7 @@ export default function UsefulListingsAdminPage() {
             </Link>
 
             <Link
-              href="/contact?subject=request-local-amenity"
+              href="/contact?topic=local-info"
               className="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-800"
             >
               Request link
@@ -521,7 +558,7 @@ export default function UsefulListingsAdminPage() {
 
           <p className="mt-2 text-sm leading-6 text-stone-600">
             These listings are added as local information, not paid business
-            adverts. Reviews, Featured and Premium flags stay disabled.
+            adverts. Reviews and Featured status stay disabled.
           </p>
 
           <form onSubmit={createListing} className="mt-6 grid gap-4">
@@ -618,18 +655,6 @@ export default function UsefulListingsAdminPage() {
                             <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">
                               {listing.status || 'approved'}
                             </span>
-
-                            {listing.is_featured ? (
-                              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
-                                Featured flag on
-                              </span>
-                            ) : null}
-
-                            {listing.is_premium ? (
-                              <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">
-                                Premium flag on
-                              </span>
-                            ) : null}
                           </div>
 
                           <p className="mt-1 break-all text-sm text-stone-600">
@@ -750,6 +775,7 @@ function UsefulListingFields({
             className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-red-700"
           >
             <option value="">No category selected</option>
+
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}

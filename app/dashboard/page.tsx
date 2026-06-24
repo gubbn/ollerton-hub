@@ -12,7 +12,8 @@ type Business = {
   status: string | null
   is_approved: boolean | null
   is_featured: boolean | null
-  is_premium: boolean | null
+  paid_tier: string | null
+  paid_tier_expires_at: string | null
   has_pending_changes: boolean | null
   pending_changed_fields: string[] | null
   changes_submitted_at: string | null
@@ -53,6 +54,10 @@ function formatDate(value: string | null) {
 
 function isApprovedBusiness(business: Business) {
   return business.status === 'approved' || business.is_approved === true
+}
+
+function isFeaturedBusiness(business: Business) {
+  return business.is_featured === true || business.paid_tier === 'featured'
 }
 
 function getApprovalLabel(business: Business) {
@@ -125,7 +130,8 @@ export default function DashboardPage() {
           status,
           is_approved,
           is_featured,
-          is_premium,
+          paid_tier,
+          paid_tier_expires_at,
           has_pending_changes,
           pending_changed_fields,
           changes_submitted_at,
@@ -197,6 +203,11 @@ export default function DashboardPage() {
     )
   }
 
+  const isFeatured = business ? isFeaturedBusiness(business) : false
+  const featuredExpiry = business?.paid_tier_expires_at
+    ? formatDate(business.paid_tier_expires_at)
+    : null
+
   return (
     <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -240,15 +251,19 @@ export default function DashboardPage() {
                 </span>
               ) : null}
 
-              {business.is_featured ? (
+              {isFeatured ? (
                 <span className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-stone-900">
                   Featured listing
                 </span>
-              ) : null}
+              ) : (
+                <span className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white">
+                  Free listing
+                </span>
+              )}
 
-              {business.is_premium ? (
-                <span className="rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-800">
-                  Premium listing
+              {featuredExpiry ? (
+                <span className="rounded-xl bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
+                  Featured until {featuredExpiry}
                 </span>
               ) : null}
             </div>
@@ -347,7 +362,7 @@ export default function DashboardPage() {
               ) : null}
             </div>
 
-            {business.is_premium ? (
+            {isFeatured ? (
               <>
                 <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
                   <MiniStat label="Views" value={stats.profile_view} />
@@ -364,7 +379,7 @@ export default function DashboardPage() {
                 </p>
               </>
             ) : (
-              <LockedMetrics isFeatured={business.is_featured === true} />
+              <LockedMetrics />
             )}
           </section>
         ) : null}
@@ -397,6 +412,22 @@ export default function DashboardPage() {
             description="See how your business appears alongside other local listings."
             href="/directory"
             buttonText="Show directory"
+          />
+
+          {business && !isFeatured ? (
+            <DashboardCard
+              title="Upgrade to Featured"
+              description="Featured listings get extra homepage visibility and access to listing performance stats."
+              href="/contact?topic=featured-listing"
+              buttonText="Ask about Featured"
+            />
+          ) : null}
+
+          <DashboardCard
+            title="Advertise locally"
+            description="Ask about separate advert space for local offers, campaigns, sponsor messages or announcements."
+            href="/contact?topic=advert-enquiry"
+            buttonText="Ask about adverts"
           />
 
           {isAdmin ? (
@@ -434,14 +465,14 @@ export default function DashboardPage() {
   )
 }
 
-function LockedMetrics({ isFeatured }: { isFeatured: boolean }) {
+function LockedMetrics() {
   return (
     <div className="mt-4 rounded-2xl bg-stone-50 p-5 ring-1 ring-stone-200">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold uppercase tracking-wide text-stone-500">
-              Premium metrics
+              Featured metrics
             </p>
 
             <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
@@ -450,21 +481,21 @@ function LockedMetrics({ isFeatured }: { isFeatured: boolean }) {
           </div>
 
           <h3 className="mt-2 text-xl font-bold text-stone-950">
-            Unlock activity stats with Premium
+            Unlock activity stats with Featured
           </h3>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-            {isFeatured
-              ? 'Metrics are included with Premium. Upgrade from Featured to Premium to see profile views, website clicks, phone clicks, email clicks and social clicks.'
-              : 'Metrics are available on Premium listings. Upgrade to see profile views, website clicks, phone clicks, email clicks and social clicks.'}
+            Featured listings get extra homepage visibility and access to
+            activity stats, including profile views, website clicks, phone
+            clicks, email clicks and social clicks.
           </p>
         </div>
 
         <Link
-          href="/contact?topic=premium-listing"
+          href="/contact?topic=featured-listing"
           className="inline-flex justify-center rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
         >
-          Ask about Premium
+          Ask about Featured
         </Link>
       </div>
 

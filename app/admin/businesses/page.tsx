@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { expireOldPaidListings } from '@/lib/expirePaidListings'
 
-type PaidTier = 'free' | 'featured' | 'premium'
+type ListingTier = 'free' | 'featured'
 
 type Business = {
   id: string
@@ -15,8 +15,7 @@ type Business = {
   status: string | null
   is_approved: boolean | null
   is_featured: boolean | null
-  is_premium: boolean | null
-  paid_tier: PaidTier | null
+  paid_tier: ListingTier | null
   paid_tier_expires_at: string | null
   listing_type: string | null
   useful_listing_type: string | null
@@ -32,11 +31,9 @@ function getListingStatus(listing: Business) {
   return 'pending'
 }
 
-function getPaidTier(listing: Business): PaidTier {
-  if (listing.paid_tier === 'premium') return 'premium'
+function getListingTier(listing: Business): ListingTier {
   if (listing.paid_tier === 'featured') return 'featured'
-  if (listing.is_premium) return 'premium'
-  if (listing.is_featured) return 'featured'
+  if (listing.is_featured === true) return 'featured'
   return 'free'
 }
 
@@ -140,7 +137,6 @@ function AdminBusinessesContent() {
         status,
         is_approved,
         is_featured,
-        is_premium,
         paid_tier,
         paid_tier_expires_at,
         listing_type,
@@ -150,9 +146,6 @@ function AdminBusinessesContent() {
         has_pending_changes
       `
       )
-      .not('listing_type', 'eq', 'community')
-      .not('listing_type', 'eq', 'local_info')
-      .is('useful_listing_type', null)
       .order('created_at', { ascending: false })
 
     if (businessesError) {
@@ -161,7 +154,7 @@ function AdminBusinessesContent() {
       return
     }
 
-    const businessOnly = (data ?? []).filter(isBusinessOnly)
+    const businessOnly = ((data ?? []) as Business[]).filter(isBusinessOnly)
 
     setBusinesses(businessOnly)
     setLoading(false)
@@ -180,12 +173,8 @@ function AdminBusinessesContent() {
       (business) => getListingStatus(business) === 'rejected'
     )
 
-    const premium = businesses.filter(
-      (business) => getPaidTier(business) === 'premium'
-    )
-
     const featured = businesses.filter(
-      (business) => getPaidTier(business) === 'featured'
+      (business) => getListingTier(business) === 'featured'
     )
 
     const pendingChanges = businesses.filter(
@@ -197,7 +186,6 @@ function AdminBusinessesContent() {
       pending: pending.length,
       approved: approved.length,
       rejected: rejected.length,
-      premium: premium.length,
       featured: featured.length,
       pendingChanges: pendingChanges.length,
     }
@@ -208,7 +196,7 @@ function AdminBusinessesContent() {
 
     return businesses.filter((business) => {
       const status = getListingStatus(business)
-      const tier = getPaidTier(business)
+      const tier = getListingTier(business)
 
       const matchesSearch =
         !term ||
@@ -270,17 +258,17 @@ function AdminBusinessesContent() {
           </h1>
 
           <p className="mt-4 max-w-3xl text-sm leading-6 text-stone-600">
-            Review, approve, reject and manage business listings. Local
-            amenities are excluded from this page and should be managed from the
-            local amenities area.
+            Review, approve, reject, feature and manage business listings.
+            Local amenities are excluded from this page and should be managed
+            from the local amenities area.
           </p>
         </header>
 
-        {error && (
+        {error ? (
           <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
-        )}
+        ) : null}
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total businesses" value={stats.total} />
@@ -289,9 +277,8 @@ function AdminBusinessesContent() {
           <StatCard label="Pending changes" value={stats.pendingChanges} />
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard label="Featured" value={stats.featured} subtle />
-          <StatCard label="Premium" value={stats.premium} subtle />
           <StatCard label="Rejected" value={stats.rejected} subtle />
           <StatCard
             label="Shown below"
@@ -326,10 +313,9 @@ function AdminBusinessesContent() {
               onChange={(event) => setTierFilter(event.target.value)}
               className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none focus:border-red-500"
             >
-              <option value="all">All tiers</option>
+              <option value="all">All listing types</option>
               <option value="free">Free</option>
               <option value="featured">Featured</option>
-              <option value="premium">Premium</option>
             </select>
           </div>
         </section>
@@ -340,6 +326,7 @@ function AdminBusinessesContent() {
               <h2 className="text-xl font-bold text-stone-950">
                 Business listings
               </h2>
+
               <p className="mt-1 text-sm text-stone-600">
                 {filteredBusinesses.length} shown from {businesses.length}{' '}
                 business listings.
@@ -355,7 +342,7 @@ function AdminBusinessesContent() {
             <div className="mt-6 space-y-3">
               {filteredBusinesses.map((business) => {
                 const status = getListingStatus(business)
-                const tier = getPaidTier(business)
+                const tier = getListingTier(business)
 
                 return (
                   <article
@@ -377,23 +364,21 @@ function AdminBusinessesContent() {
                             {status}
                           </span>
 
-                          {tier === 'premium' && (
-                            <span className="rounded-full bg-stone-950 px-3 py-1 text-xs font-semibold text-white">
-                              Premium
-                            </span>
-                          )}
-
-                          {tier === 'featured' && (
+                          {tier === 'featured' ? (
                             <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
                               Featured
                             </span>
+                          ) : (
+                            <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
+                              Free
+                            </span>
                           )}
 
-                          {business.has_pending_changes && (
+                          {business.has_pending_changes ? (
                             <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
                               Changes pending
                             </span>
-                          )}
+                          ) : null}
                         </div>
 
                         <p className="mt-2 text-sm text-stone-600">
@@ -401,12 +386,12 @@ function AdminBusinessesContent() {
                           {formatDate(business.created_at)}
                         </p>
 
-                        {tier !== 'free' && (
+                        {tier === 'featured' ? (
                           <p className="mt-1 text-xs text-stone-500">
-                            Paid tier expires{' '}
+                            Featured until{' '}
                             {formatDate(business.paid_tier_expires_at)}
                           </p>
-                        )}
+                        ) : null}
 
                         <p className="mt-1 text-xs text-stone-400">
                           /business/{business.slug}

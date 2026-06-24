@@ -27,7 +27,6 @@ type Listing = {
   service_area: string | null
   logo_url: string | null
   is_featured: boolean | null
-  is_premium: boolean | null
   listing_type: string | null
   useful_listing_type: string | null
   categories: CategoryRelation
@@ -171,7 +170,6 @@ function DirectoryContent() {
           service_area,
           logo_url,
           is_featured,
-          is_premium,
           listing_type,
           useful_listing_type,
           categories (
@@ -440,7 +438,6 @@ function DirectoryContent() {
 
                   <ListingBadges
                     isFeatured={listing.is_featured}
-                    isPremium={listing.is_premium}
                     listingType={listing.listing_type}
                     usefulListingType={listing.useful_listing_type}
                     className="mt-1.5"

@@ -1,4 +1,4 @@
-export type ListingTier = 'free' | 'featured' | 'premium'
+export type ListingTier = 'free' | 'featured'
 
 export const WORD_LIMITS: Record<
   ListingTier,
@@ -14,10 +14,6 @@ export const WORD_LIMITS: Record<
   featured: {
     description: 120,
     services: 100,
-  },
-  premium: {
-    description: 250,
-    services: 200,
   },
 }
 
@@ -41,19 +37,20 @@ export function trimToWordLimit(value: string, limit: number) {
 
 export function getListingTier({
   is_featured,
-  is_premium,
+  paid_tier,
 }: {
   is_featured?: boolean | null
-  is_premium?: boolean | null
+  paid_tier?: string | null
 }): ListingTier {
-  if (is_premium) return 'premium'
+  if (paid_tier === 'featured') return 'featured'
   if (is_featured) return 'featured'
+
   return 'free'
 }
 
 export function getTierLabel(tier: ListingTier) {
-  if (tier === 'premium') return 'Premium'
   if (tier === 'featured') return 'Featured'
+
   return 'Free'
 }
 

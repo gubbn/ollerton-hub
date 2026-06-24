@@ -1,6 +1,5 @@
 type ListingBadgesProps = {
   isFeatured?: boolean | null
-  isPremium?: boolean | null
   listingType?: string | null
   usefulListingType?: string | null
   className?: string
@@ -19,14 +18,13 @@ function isLocalInfoListing(
 
 export default function ListingBadges({
   isFeatured,
-  isPremium,
   listingType,
   usefulListingType,
   className = '',
 }: ListingBadgesProps) {
   const showLocalInfo = isLocalInfoListing(listingType, usefulListingType)
 
-  if (!isFeatured && !isPremium && !showLocalInfo) {
+  if (!isFeatured && !showLocalInfo) {
     return null
   }
 
@@ -38,13 +36,7 @@ export default function ListingBadges({
         </span>
       ) : null}
 
-      {isPremium ? (
-        <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold leading-none text-amber-800 ring-1 ring-amber-300">
-          Premium
-        </span>
-      ) : null}
-
-      {isFeatured ? (
+      {!showLocalInfo && isFeatured ? (
         <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold leading-none text-emerald-800 ring-1 ring-emerald-300">
           Featured
         </span>

@@ -8,11 +8,10 @@ export async function expireOldPaidListings() {
     .update({
       paid_tier: 'free',
       is_featured: false,
-      is_premium: false,
       paid_tier_last_downgraded_at: now,
       updated_at: now,
     })
-    .in('paid_tier', ['featured', 'premium'])
+    .in('paid_tier', ['featured'])
     .lt('paid_tier_expires_at', now)
 
   return { error }

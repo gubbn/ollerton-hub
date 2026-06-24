@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-
 import { expireOldPaidListings } from '@/lib/expirePaidListings'
+
 type Business = {
   id: string
   business_name: string
@@ -13,7 +13,6 @@ type Business = {
   status: string | null
   is_approved: boolean | null
   is_featured: boolean | null
-  is_premium: boolean | null
   listing_type: string | null
   useful_listing_type: string | null
   town: string | null
@@ -124,7 +123,7 @@ export default function AdminPage() {
       supabase
         .from('businesses')
         .select(
-          'id, business_name, slug, status, is_approved, is_featured, is_premium, listing_type, useful_listing_type, town, created_at'
+          'id, business_name, slug, status, is_approved, is_featured, listing_type, useful_listing_type, town, created_at'
         )
         .order('created_at', { ascending: false }),
 
@@ -135,12 +134,21 @@ export default function AdminPage() {
       supabase.from('reviews').select('id, is_approved'),
     ])
 
-    if (businessesResult.data) setBusinesses(businessesResult.data)
-    if (statsResult.data) setStats(statsResult.data)
-    if (contactRequestsResult.data) {
-      setContactRequests(contactRequestsResult.data)
+    if (businessesResult.data) {
+      setBusinesses(businessesResult.data as Business[])
     }
-    if (reviewsResult.data) setReviews(reviewsResult.data)
+
+    if (statsResult.data) {
+      setStats(statsResult.data as BusinessStat[])
+    }
+
+    if (contactRequestsResult.data) {
+      setContactRequests(contactRequestsResult.data as ContactRequest[])
+    }
+
+    if (reviewsResult.data) {
+      setReviews(reviewsResult.data as Review[])
+    }
 
     setLoading(false)
   }
@@ -162,6 +170,10 @@ export default function AdminPage() {
 
     const rejectedBusinesses = businessListings.filter(
       (business) => getListingStatus(business) === 'rejected'
+    )
+
+    const featuredBusinesses = businessListings.filter(
+      (business) => business.is_featured === true
     )
 
     const signedUpThisWeek = businessListings.filter((business) => {
@@ -190,6 +202,7 @@ export default function AdminPage() {
       pendingBusinesses,
       approvedBusinesses,
       rejectedBusinesses,
+      featuredBusinesses,
       signedUpThisWeek,
       signedUpThisMonth,
       newContactRequests,
@@ -225,9 +238,11 @@ export default function AdminPage() {
             <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
               Admin centre
             </p>
+
             <h1 className="mt-2 text-3xl font-bold text-stone-950">
               Ollerton Hub admin
             </h1>
+
             <p className="mt-2 max-w-2xl text-sm text-stone-600">
               Review new businesses, check site activity and manage the main
               admin areas from one place.
@@ -248,9 +263,11 @@ export default function AdminPage() {
               <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">
                 Needs attention
               </p>
+
               <h2 className="mt-1 text-2xl font-bold text-stone-950">
                 Pending businesses
               </h2>
+
               <p className="mt-2 text-sm text-stone-700">
                 These are business listings waiting for approval. Local
                 amenities are not shown here because they are admin-entered.
@@ -261,6 +278,7 @@ export default function AdminPage() {
               <p className="text-4xl font-bold text-amber-700">
                 {adminStats.pendingBusinesses.length}
               </p>
+
               <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
                 Waiting
               </p>
@@ -289,17 +307,11 @@ export default function AdminPage() {
                           Pending
                         </span>
 
-                        {business.is_premium && (
-                          <span className="rounded-full bg-stone-900 px-3 py-1 font-semibold text-white">
-                            Premium
-                          </span>
-                        )}
-
-                        {business.is_featured && (
+                        {business.is_featured ? (
                           <span className="rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-800">
                             Featured
                           </span>
-                        )}
+                        ) : null}
                       </div>
 
                       <p className="mt-3 text-sm text-stone-600">
@@ -329,7 +341,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          {adminStats.pendingBusinesses.length > 6 && (
+          {adminStats.pendingBusinesses.length > 6 ? (
             <div className="mt-5">
               <Link
                 href="/admin/businesses?status=pending"
@@ -338,7 +350,7 @@ export default function AdminPage() {
                 View all pending businesses
               </Link>
             </div>
-          )}
+          ) : null}
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -346,24 +358,27 @@ export default function AdminPage() {
             label="Signed up this week"
             value={adminStats.signedUpThisWeek.length}
           />
+
           <AdminStatCard
             label="Signed up this month"
             value={adminStats.signedUpThisMonth.length}
           />
+
           <AdminStatCard
             label="Total businesses"
             value={adminStats.businessListings.length}
           />
+
           <AdminStatCard
-            label="Approved businesses"
-            value={adminStats.approvedBusinesses.length}
+            label="Featured businesses"
+            value={adminStats.featuredBusinesses.length}
           />
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <AdminActionCard
             title="Manage businesses"
-            description="Approve, reject, feature, upgrade or edit business listings."
+            description="Approve, reject, feature or edit business listings."
             href="/admin/businesses"
             badge={`${adminStats.pendingBusinesses.length} pending`}
           />
@@ -377,7 +392,7 @@ export default function AdminPage() {
 
           <AdminActionCard
             title="Contact requests"
-            description="View subscription, advert, listing report and general enquiries."
+            description="View Featured listing, advert, listing report and general enquiries."
             href="/admin/contact-requests"
             badge={`${adminStats.newContactRequests.length} new`}
           />
@@ -406,6 +421,7 @@ export default function AdminPage() {
             <h2 className="text-lg font-bold text-stone-950">
               Platform activity
             </h2>
+
             <p className="mt-1 text-xs text-stone-500">
               Combined activity across all business listings.
             </p>
@@ -416,16 +432,21 @@ export default function AdminPage() {
               label="Profile views"
               value={adminStats.profileViews}
             />
+
             <MiniStatCard
               label="Website clicks"
               value={adminStats.websiteClicks}
             />
+
             <MiniStatCard label="Calls" value={adminStats.phoneClicks} />
+
             <MiniStatCard
               label="Email clicks"
               value={adminStats.emailClicks}
             />
+
             <MiniStatCard label="Facebook" value={adminStats.facebookClicks} />
+
             <MiniStatCard
               label="Instagram"
               value={adminStats.instagramClicks}
@@ -486,11 +507,11 @@ function AdminActionCard({
       <div className="flex items-start justify-between gap-4">
         <h2 className="text-lg font-bold text-stone-950">{title}</h2>
 
-        {badge && (
+        {badge ? (
           <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
             {badge}
           </span>
-        )}
+        ) : null}
       </div>
 
       <p className="mt-3 text-sm leading-6 text-stone-600">{description}</p>

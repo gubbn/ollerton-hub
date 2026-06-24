@@ -7,8 +7,9 @@ import { supabase } from '@/lib/supabaseClient'
 import {
   getRenewedExpiryDate,
   getThirtyDaysFromNow,
-  type PaidTier,
 } from '@/lib/paidTierHelpers'
+
+type ListingTier = 'free' | 'featured'
 
 type Category = {
   id: string
@@ -42,8 +43,7 @@ type Business = {
   status: string | null
   is_approved: boolean | null
   is_featured: boolean | null
-  is_premium: boolean | null
-  paid_tier: PaidTier | null
+  paid_tier: ListingTier | null
   paid_tier_started_at: string | null
   paid_tier_expires_at: string | null
   paid_tier_renewed_at: string | null
@@ -109,7 +109,6 @@ const BUSINESS_SELECT = `
   status,
   is_approved,
   is_featured,
-  is_premium,
   paid_tier,
   paid_tier_started_at,
   paid_tier_expires_at,
@@ -222,9 +221,11 @@ function getCategoryName(categories: Category[], categoryId: string | null) {
   )
 }
 
-function getPaidTierLabel(tier: PaidTier | null) {
-  if (tier === 'featured') return 'Featured'
-  if (tier === 'premium') return 'Premium'
+function getListingTierLabel(business: Business) {
+  if (business.paid_tier === 'featured' || business.is_featured === true) {
+    return 'Featured'
+  }
+
   return 'Free'
 }
 
@@ -263,9 +264,11 @@ function getBusinessPendingValue(
   if (field === 'services') return business.services
   if (field === 'logo_url') return business.logo_url
   if (field === 'use_external_reviews') return business.use_external_reviews
+
   if (field === 'external_review_platform') {
     return business.external_review_platform
   }
+
   if (field === 'external_review_url') return business.external_review_url
 
   return null
@@ -285,11 +288,13 @@ function FieldValue({
   if (field === 'logo_url' && typeof value === 'string' && value.trim()) {
     return (
       <div className="space-y-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={value}
           alt="Business logo preview"
           className="h-20 w-20 rounded-xl border border-stone-200 bg-white object-contain p-2"
         />
+
         <p className="break-words text-sm">{value}</p>
       </div>
     )
@@ -574,7 +579,7 @@ export default function ManageBusinessPage() {
     setSuccess('Business rejected.')
   }
 
-  async function updatePaidTier(tier: PaidTier) {
+  async function updateListingTier(tier: ListingTier) {
     if (!business) return
 
     setSaving(true)
@@ -588,16 +593,14 @@ export default function ManageBusinessPage() {
         ? {
             paid_tier: 'free',
             is_featured: false,
-            is_premium: false,
             paid_tier_started_at: null,
             paid_tier_expires_at: null,
             paid_tier_renewed_at: null,
             updated_at: now,
           }
         : {
-            paid_tier: tier,
-            is_featured: tier === 'featured',
-            is_premium: tier === 'premium',
+            paid_tier: 'featured',
+            is_featured: true,
             paid_tier_started_at: now,
             paid_tier_expires_at: expiresAt,
             paid_tier_renewed_at: null,
@@ -624,11 +627,11 @@ export default function ManageBusinessPage() {
     setSuccess(
       tier === 'free'
         ? 'Listing changed back to Free.'
-        : `Listing changed to ${getPaidTierLabel(tier)} for 30 days.`
+        : 'Listing changed to Featured for 30 days.'
     )
   }
 
-  async function renewPaidTier() {
+  async function renewFeaturedListing() {
     if (!business) return
 
     setSaving(true)
@@ -642,12 +645,14 @@ export default function ManageBusinessPage() {
     const { data, error: updateError } = await supabase
       .from('businesses')
       .update({
+        paid_tier: 'featured',
+        is_featured: true,
         paid_tier_renewed_at: renewedAt,
         paid_tier_expires_at: expiresAt,
         updated_at: renewedAt,
       })
       .eq('id', business.id)
-      .in('paid_tier', ['featured', 'premium'])
+      .eq('paid_tier', 'featured')
       .not('listing_type', 'eq', 'community')
       .not('listing_type', 'eq', 'local_info')
       .select(BUSINESS_SELECT)
@@ -661,7 +666,7 @@ export default function ManageBusinessPage() {
     }
 
     setBusiness(data as Business)
-    setSuccess('Listing renewed for another 30 days.')
+    setSuccess('Featured listing renewed for another 30 days.')
   }
 
   async function approvePendingChanges() {
@@ -820,6 +825,9 @@ export default function ManageBusinessPage() {
     )
   }
 
+  const isFeatured =
+    business.paid_tier === 'featured' || business.is_featured === true
+
   return (
     <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
       <section className="mx-auto max-w-5xl">
@@ -842,29 +850,27 @@ export default function ManageBusinessPage() {
                   {business.status || 'pending'}
                 </span>
 
-                {business.is_approved && (
+                {business.is_approved ? (
                   <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 ring-1 ring-green-200">
                     Approved
                   </span>
-                )}
+                ) : null}
 
-                {business.paid_tier === 'featured' && (
+                {isFeatured ? (
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200">
                     Featured
                   </span>
-                )}
-
-                {business.paid_tier === 'premium' && (
-                  <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
-                    Premium
+                ) : (
+                  <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700 ring-1 ring-stone-200">
+                    Free
                   </span>
                 )}
 
-                {business.has_pending_changes && (
+                {business.has_pending_changes ? (
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
                     Changes pending review
                   </span>
-                )}
+                ) : null}
               </div>
 
               <h1 className="mt-4 text-3xl font-bold text-stone-950">
@@ -903,43 +909,43 @@ export default function ManageBusinessPage() {
             </div>
           </div>
 
-          {error && (
+          {error ? (
             <p className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700 ring-1 ring-red-100">
               {error}
             </p>
-          )}
+          ) : null}
 
-          {success && (
+          {success ? (
             <p className="mt-5 rounded-xl bg-green-50 p-4 text-sm text-green-700 ring-1 ring-green-100">
               {success}
             </p>
-          )}
+          ) : null}
 
           <section className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
             <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
                 <h2 className="text-xl font-bold text-stone-950">
-                  Paid listing
+                  Featured listing
                 </h2>
 
                 <p className="mt-2 text-sm text-stone-600">
-                  Featured and Premium listings run for 30 days from purchase or
-                  renewal.
+                  Featured listings run for 30 days from purchase or renewal.
+                  Free listings remain in the alphabetical directory.
                 </p>
               </div>
 
               <div className="rounded-2xl bg-stone-100 px-4 py-3 text-sm">
                 <p className="font-semibold text-stone-950">
-                  {getPaidTierLabel(business.paid_tier)}
+                  {getListingTierLabel(business)}
                 </p>
-                <p className="mt-1 text-xs text-stone-500">Current tier</p>
+                <p className="mt-1 text-xs text-stone-500">Current listing</p>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
               <button
                 type="button"
-                onClick={() => updatePaidTier('free')}
+                onClick={() => updateListingTier('free')}
                 disabled={saving}
                 className="rounded-2xl border border-stone-300 px-4 py-3 text-sm font-semibold text-stone-800 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -948,27 +954,18 @@ export default function ManageBusinessPage() {
 
               <button
                 type="button"
-                onClick={() => updatePaidTier('featured')}
+                onClick={() => updateListingTier('featured')}
                 disabled={saving}
                 className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Featured - 30 days
-              </button>
-
-              <button
-                type="button"
-                onClick={() => updatePaidTier('premium')}
-                disabled={saving}
-                className="rounded-2xl border border-stone-900 bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Premium - 30 days
+                Featured for 30 days
               </button>
             </div>
 
             <div className="mt-5 grid gap-3 rounded-2xl bg-stone-50 p-4 text-sm text-stone-700 md:grid-cols-3">
               <p>
                 <span className="block text-xs font-semibold uppercase tracking-wide text-stone-400">
-                  Purchased
+                  Started
                 </span>
                 {formatDate(business.paid_tier_started_at)}
               </p>
@@ -988,13 +985,13 @@ export default function ManageBusinessPage() {
               </p>
             </div>
 
-            {(business.paid_tier === 'featured' ||
-              business.paid_tier === 'premium') && (
+            {isFeatured ? (
               <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-red-900">
-                    Renew paid listing
+                    Renew Featured listing
                   </p>
+
                   <p className="mt-1 text-sm text-red-700">
                     Add another 30 days onto the current expiry date.
                   </p>
@@ -1002,17 +999,17 @@ export default function ManageBusinessPage() {
 
                 <button
                   type="button"
-                  onClick={renewPaidTier}
+                  onClick={renewFeaturedListing}
                   disabled={saving}
                   className="rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-stone-400"
                 >
                   Renew for 30 days
                 </button>
               </div>
-            )}
+            ) : null}
           </section>
 
-          {hasPendingChanges && (
+          {hasPendingChanges ? (
             <section className="mt-8 rounded-2xl border border-amber-300 bg-amber-50 p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -1065,18 +1062,19 @@ export default function ManageBusinessPage() {
                         {formatFieldLabel(field)}
                       </p>
 
-                      {field === 'business_name' && pendingChanges.slug && (
+                      {field === 'business_name' && pendingChanges.slug ? (
                         <p className="mt-1 text-xs text-stone-500">
                           The public URL will also update to /business/
                           {pendingChanges.slug}
                         </p>
-                      )}
+                      ) : null}
 
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
                             Current approved
                           </p>
+
                           <div className="mt-1 rounded-lg bg-stone-100 p-3 text-stone-800">
                             <FieldValue
                               field={field}
@@ -1090,6 +1088,7 @@ export default function ManageBusinessPage() {
                           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
                             Proposed change
                           </p>
+
                           <div className="mt-1 rounded-lg bg-amber-100 p-3 text-amber-950">
                             <FieldValue
                               field={field}
@@ -1115,7 +1114,7 @@ export default function ManageBusinessPage() {
                 />
               </label>
             </section>
-          )}
+          ) : null}
 
           <section className="mt-8 rounded-2xl border border-stone-200 bg-stone-50 p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1123,9 +1122,10 @@ export default function ManageBusinessPage() {
                 <h2 className="text-xl font-bold text-stone-950">
                   Approved/live listing details
                 </h2>
+
                 <p className="mt-1 text-sm text-stone-600">
                   Edits saved here update the live business record directly.
-                  Paid listing status is managed separately above.
+                  Featured status is managed separately above.
                 </p>
               </div>
 
@@ -1164,6 +1164,7 @@ export default function ManageBusinessPage() {
                   className="mt-2 w-full rounded-lg border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-stone-500"
                 >
                   <option value="">Choose a category</option>
+
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -1237,18 +1238,20 @@ export default function ManageBusinessPage() {
                 onChange={(value) => updateField('logo_url', value)}
               />
 
-              {business.logo_url && (
+              {business.logo_url ? (
                 <div className="rounded-xl border border-stone-200 bg-white p-4">
                   <p className="text-sm font-semibold text-stone-700">
                     Current logo
                   </p>
+
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={business.logo_url}
                     alt={`${business.business_name} logo`}
                     className="mt-3 h-24 w-24 rounded-xl border border-stone-200 object-contain p-2"
                   />
                 </div>
-              )}
+              ) : null}
 
               <TextInput
                 label="Address line 1"
@@ -1315,7 +1318,7 @@ export default function ManageBusinessPage() {
               </label>
             </div>
 
-            {business.use_external_reviews && (
+            {business.use_external_reviews ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <TextInput
                   label="External review platform"
@@ -1335,7 +1338,7 @@ export default function ManageBusinessPage() {
                   placeholder="https://..."
                 />
               </div>
-            )}
+            ) : null}
 
             <div className="mt-6 flex justify-end">
               <button
@@ -1392,6 +1395,7 @@ function TextInput({
       }`}
     >
       {label}
+
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -1422,6 +1426,7 @@ function TextAreaInput({
       }`}
     >
       {label}
+
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}

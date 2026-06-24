@@ -329,7 +329,6 @@ export default function AdminAmenitiesPage() {
       status: 'approved',
       is_approved: true,
       is_featured: false,
-      is_premium: false,
       updated_at: new Date().toISOString(),
     }
 

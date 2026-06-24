@@ -29,7 +29,6 @@ type Business = {
   opening_times: string | null
   logo_url: string | null
   is_featured: boolean | null
-  is_premium: boolean | null
   listing_type: string | null
   useful_listing_type: string | null
   use_external_reviews: boolean | null
@@ -51,12 +50,16 @@ function getCategoryName(categories: CategoryRelation) {
   return categories.name
 }
 
-function isCommunityListing(business: Business) {
-  return business.listing_type === 'community'
+function isUsefulListing(business: Business) {
+  return (
+    business.listing_type === 'community' ||
+    business.listing_type === 'local_info' ||
+    !!business.useful_listing_type
+  )
 }
 
 function getListingTypeLabel(business: Business) {
-  if (isCommunityListing(business)) {
+  if (isUsefulListing(business)) {
     return business.useful_listing_type || 'Useful local information'
   }
 
@@ -114,7 +117,6 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
       opening_times,
       logo_url,
       is_featured,
-      is_premium,
       listing_type,
       useful_listing_type,
       use_external_reviews,
@@ -132,13 +134,13 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
   if (!businessData) notFound()
 
   const business = businessData as Business
-  const isCommunity = isCommunityListing(business)
+  const isUseful = isUsefulListing(business)
 
   const reportListingUrl = buildContactUrl('report-listing', business)
   const suggestUpdateUrl = buildContactUrl('local-info', business)
 
   const hasExternalReviewLink =
-    !isCommunity &&
+    !isUseful &&
     Boolean(business.use_external_reviews) &&
     Boolean(business.external_review_url)
 
@@ -154,7 +156,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
   let reviews: Review[] = []
 
-  if (!isCommunity) {
+  if (!isUseful) {
     const { data: reviewData } = await supabase
       .from('reviews')
       .select('id, reviewer_name, rating, review_text')
@@ -173,7 +175,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
   return (
     <main className="min-h-screen bg-stone-100 text-stone-900">
-      {!isCommunity ? (
+      {!isUseful ? (
         <BusinessStatTracker businessId={business.id} eventType="profile_view" />
       ) : null}
 
@@ -211,19 +213,18 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                   <ListingBadges
                     listingType={business.listing_type}
                     usefulListingType={business.useful_listing_type}
-                    isPremium={business.is_premium}
                     isFeatured={business.is_featured}
                     className="mt-2"
                   />
                 </div>
 
-                {isCommunity ? (
+                {isUseful ? (
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-200">
                     Useful local information listed on Ollerton Hub.
                   </p>
                 ) : null}
 
-                {averageRating !== null && !isCommunity ? (
+                {averageRating !== null && !isUseful ? (
                   <p className="mt-3 text-stone-100">
                     ⭐ {averageRating.toFixed(1)} from {reviews.length} review
                     {reviews.length === 1 ? '' : 's'}
@@ -240,12 +241,12 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
           <div className="space-y-6 lg:col-span-2">
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
               <h2 className="text-xl font-bold">
-                {isCommunity ? 'About this local amenity' : 'About'}
+                {isUseful ? 'About this local amenity' : 'About'}
               </h2>
 
               <p className="mt-3 whitespace-pre-line text-stone-700">
                 {business.description ??
-                  (isCommunity
+                  (isUseful
                     ? 'No information has been added yet.'
                     : 'No description added yet.')}
               </p>
@@ -254,7 +255,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
             {business.services ? (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
                 <h2 className="text-xl font-bold">
-                  {isCommunity ? 'Information' : 'Services'}
+                  {isUseful ? 'Information' : 'Services'}
                 </h2>
 
                 <p className="mt-3 whitespace-pre-line text-stone-700">
@@ -263,7 +264,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               </div>
             ) : null}
 
-            {!isCommunity ? (
+            {!isUseful ? (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -335,14 +336,14 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
           <aside className="space-y-6">
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
               <h2 className="text-xl font-bold">
-                {isCommunity ? 'Contact details' : 'Contact'}
+                {isUseful ? 'Contact details' : 'Contact'}
               </h2>
 
               <div className="mt-4 space-y-3 text-sm text-stone-700">
                 {business.phone ? (
                   <p>
                     📞{' '}
-                    {!isCommunity ? (
+                    {!isUseful ? (
                       <BusinessStatTracker
                         businessId={business.id}
                         eventType="phone_click"
@@ -365,7 +366,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 {business.email ? (
                   <p>
                     ✉️{' '}
-                    {!isCommunity ? (
+                    {!isUseful ? (
                       <BusinessStatTracker
                         businessId={business.id}
                         eventType="email_click"
@@ -385,7 +386,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 {business.website ? (
                   <p>
                     🌐{' '}
-                    {!isCommunity ? (
+                    {!isUseful ? (
                       <BusinessStatTracker
                         businessId={business.id}
                         eventType="website_click"
@@ -408,7 +409,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                   </p>
                 ) : null}
 
-                {business.facebook && !isCommunity ? (
+                {business.facebook && !isUseful ? (
                   <p>
                     Facebook:{' '}
                     <BusinessStatTracker
@@ -423,7 +424,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                   </p>
                 ) : null}
 
-                {business.instagram && !isCommunity ? (
+                {business.instagram && !isUseful ? (
                   <p>
                     Instagram:{' '}
                     <BusinessStatTracker
@@ -451,7 +452,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
             {business.opening_times ? (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
                 <h2 className="text-xl font-bold">
-                  {isCommunity
+                  {isUseful
                     ? 'Opening times / availability'
                     : 'Opening times'}
                 </h2>
@@ -464,7 +465,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
 
             <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
               <h2 className="text-xl font-bold">
-                {isCommunity ? 'Location' : 'Address'}
+                {isUseful ? 'Location' : 'Address'}
               </h2>
 
               <div className="mt-4 text-sm text-stone-700">
@@ -489,7 +490,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
                 {business.service_area ? (
                   <p className="mt-4">
                     <span className="font-semibold">
-                      {isCommunity ? 'Area covered:' : 'Service area:'}
+                      {isUseful ? 'Area covered:' : 'Service area:'}
                     </span>{' '}
                     {business.service_area}
                   </p>
@@ -506,7 +507,7 @@ export default async function BusinessPage({ params }: BusinessPageProps) {
               </div>
             </div>
 
-            {isCommunity ? (
+            {isUseful ? (
               <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200">
                 <h2 className="text-xl font-bold">Suggest an update</h2>
 

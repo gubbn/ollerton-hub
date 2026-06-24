@@ -7,11 +7,9 @@ import { supabase } from '@/lib/supabaseClient'
 
 type ContactTopic =
   | 'general'
-  | 'subscriptions'
+  | 'featured-listing'
   | 'advert-enquiry'
   | 'report-listing'
-  | 'featured-listing'
-  | 'premium-listing'
   | 'local-info'
   | 'technical'
 
@@ -33,13 +31,13 @@ const topicOptions: TopicOption[] = [
     messagePlaceholder: 'How can we help?',
   },
   {
-    value: 'subscriptions',
-    label: 'Listing options',
-    title: 'Listing options enquiry',
+    value: 'featured-listing',
+    label: 'Featured listing',
+    title: 'Featured listing enquiry',
     intro:
-      'Ask about Free, Featured or Premium listings on Ollerton Hub.',
+      'Ask about giving your business extra visibility on Ollerton Hub with a Featured listing.',
     messagePlaceholder:
-      'Tell us what you would like to know about listing options.',
+      'Tell us which business you would like to feature and what you would like to know.',
   },
   {
     value: 'advert-enquiry',
@@ -58,24 +56,6 @@ const topicOptions: TopicOption[] = [
       'Use this form to report incorrect details, unsuitable content or a concern about a listing.',
     messagePlaceholder:
       'Please explain what is wrong with the listing and what you think needs checking.',
-  },
-  {
-    value: 'featured-listing',
-    label: 'Featured listing',
-    title: 'Featured listing enquiry',
-    intro:
-      'Ask about giving your listing extra visibility on Ollerton Hub.',
-    messagePlaceholder:
-      'Tell us which listing you would like to feature and what you would like to achieve.',
-  },
-  {
-    value: 'premium-listing',
-    label: 'Premium listing',
-    title: 'Premium listing enquiry',
-    intro:
-      'Ask about the highest visibility listing option on Ollerton Hub.',
-    messagePlaceholder:
-      'Tell us about your business and what you would like from a Premium listing.',
   },
   {
     value: 'local-info',

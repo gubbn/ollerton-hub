@@ -22,9 +22,8 @@ export default function AboutPage() {
 
           <p className="mt-4 max-w-3xl leading-7 text-stone-700">
             The main directory stays alphabetical so it is simple and fair to
-            browse. Featured and Premium listings get extra visibility on
-            Ollerton Hub, but they do not change the alphabetical order of the
-            directory.
+            browse. Featured listings get extra visibility on Ollerton Hub, but
+            they do not change the alphabetical order of the directory.
           </p>
 
           <p className="mt-4 max-w-3xl leading-7 text-stone-700">
@@ -42,10 +41,10 @@ export default function AboutPage() {
             </Link>
 
             <Link
-              href="/contact?topic=subscriptions"
+              href="/contact?topic=featured-listing"
               className="rounded-xl bg-stone-900 px-5 py-3 text-sm font-semibold text-white hover:bg-stone-800"
             >
-              Ask about listing options
+              Ask about Featured
             </Link>
 
             <Link
@@ -57,7 +56,7 @@ export default function AboutPage() {
           </div>
         </div>
 
-        <section className="mt-8 grid gap-6 lg:grid-cols-3">
+        <section className="mt-8 grid gap-6 lg:grid-cols-2">
           <PricingCard
             label="Free"
             title="Free Listing"
@@ -67,7 +66,7 @@ export default function AboutPage() {
             includedTitle="Includes:"
             items={[
               'Business profile page',
-              'Business name and description',
+              'Business name and short description',
               'Phone number and email address',
               'Website and social media links',
               'Opening times',
@@ -82,10 +81,10 @@ export default function AboutPage() {
           />
 
           <PricingCard
-            featured
+            highlighted
             label="Featured"
             title="Featured Listing"
-            price="£10"
+            price="£18"
             priceNote="/ month"
             description="A simple visibility boost for businesses that want to stand out on Ollerton Hub."
             includedTitle="Includes everything in Free, plus:"
@@ -93,35 +92,13 @@ export default function AboutPage() {
               'Featured badge',
               'Included in the Featured section on the homepage',
               'Extra visibility outside the main directory',
+              'More space for your business description and services',
               'Useful for businesses that want more local attention',
               'Directory order still remains alphabetical',
             ]}
-            bestFor="Best for businesses that want extra visibility without needing the full Premium package."
+            bestFor="Best for businesses that want more visibility without making the directory unfair."
             href="/contact?topic=featured-listing"
             buttonText="Ask about Featured"
-          />
-
-          <PricingCard
-            premium
-            label="Premium"
-            title="Premium Listing"
-            price="£25"
-            priceNote="/ month"
-            description="The highest visibility listing option for businesses that want a stronger presence."
-            includedTitle="Includes everything in Featured, plus:"
-            items={[
-              'Premium badge',
-              'Included in the Premium section on the homepage',
-              'Enhanced profile presence',
-              'Option to highlight key services or offers',
-              'Access to listing performance metrics',
-              'View profile views and contact clicks',
-              'External review link option',
-              'Best visibility package on Ollerton Hub',
-            ]}
-            bestFor="Best for businesses that rely on local visibility and want the strongest listing package."
-            href="/contact?topic=premium-listing"
-            buttonText="Ask about Premium"
           />
         </section>
 
@@ -137,14 +114,14 @@ export default function AboutPage() {
               </h2>
 
               <p className="mt-3 max-w-3xl leading-7 text-stone-700">
-                Advert spaces are separate from Free, Featured and Premium
-                listings. They are designed for local adverts, sponsor messages,
+                Advert spaces are separate from Free and Featured listings.
+                They are designed for local adverts, sponsor messages,
                 community campaigns, seasonal offers and specific promotions.
               </p>
 
               <p className="mt-3 max-w-3xl leading-7 text-stone-700">
                 This is the best option if you want a dedicated advert-style
-                message rather than a listing package.
+                message rather than a directory listing upgrade.
               </p>
             </div>
 
@@ -181,6 +158,7 @@ export default function AboutPage() {
                     <span className="rounded-full bg-white px-4 py-2 text-stone-900">
                       Free quotes
                     </span>
+
                     <span className="rounded-full bg-red-700 px-4 py-2 text-white">
                       Local service
                     </span>
@@ -192,7 +170,9 @@ export default function AboutPage() {
                     <p className="text-sm font-semibold uppercase tracking-wide text-red-100">
                       Call today
                     </p>
+
                     <p className="mt-2 text-2xl font-bold">01623 000 000</p>
+
                     <p className="mt-2 text-sm text-red-100">
                       smithandsons.co.uk
                     </p>
@@ -237,8 +217,9 @@ export default function AboutPage() {
           </h2>
 
           <p className="mt-3 max-w-3xl leading-7 text-stone-200">
-            You do not need a paid plan to be listed. Create a free business
-            listing now, or request a useful local amenity to be added to the
+            You do not need a paid listing to be included. Create a free
+            business listing now, upgrade to Featured when you want more
+            visibility, or request a useful local amenity to be added to the
             directory for residents.
           </p>
 
@@ -281,8 +262,7 @@ function PricingCard({
   bestFor,
   href,
   buttonText,
-  featured = false,
-  premium = false,
+  highlighted = false,
 }: {
   label: string
   title: string
@@ -294,41 +274,26 @@ function PricingCard({
   bestFor: string
   href: string
   buttonText: string
-  featured?: boolean
-  premium?: boolean
+  highlighted?: boolean
 }) {
   return (
     <div
       className={`rounded-3xl bg-white p-6 shadow-sm ${
-        featured
-          ? 'ring-2 ring-red-300'
-          : premium
-            ? 'ring-2 ring-stone-800'
-            : 'ring-1 ring-stone-200'
+        highlighted ? 'ring-2 ring-red-300' : 'ring-1 ring-stone-200'
       }`}
     >
       <div className="flex items-center justify-between gap-3">
         <p
           className={`text-sm font-semibold uppercase tracking-wide ${
-            featured
-              ? 'text-red-700'
-              : premium
-                ? 'text-stone-900'
-                : 'text-stone-500'
+            highlighted ? 'text-red-700' : 'text-stone-500'
           }`}
         >
           {label}
         </p>
 
-        {featured ? (
+        {highlighted ? (
           <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
             Visibility boost
-          </span>
-        ) : null}
-
-        {premium ? (
-          <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
-            Top package
           </span>
         ) : null}
       </div>
@@ -359,11 +324,7 @@ function PricingCard({
 
       <div
         className={`mt-6 rounded-2xl p-4 text-sm ${
-          featured
-            ? 'bg-red-50 text-red-900'
-            : premium
-              ? 'bg-stone-900 text-white'
-              : 'bg-stone-50 text-stone-700'
+          highlighted ? 'bg-red-50 text-red-900' : 'bg-stone-50 text-stone-700'
         }`}
       >
         {bestFor}
@@ -372,11 +333,9 @@ function PricingCard({
       <Link
         href={href}
         className={`mt-6 inline-flex w-full justify-center rounded-xl px-5 py-3 text-sm font-semibold ${
-          featured
+          highlighted
             ? 'bg-red-700 text-white hover:bg-red-800'
-            : premium
-              ? 'bg-stone-900 text-white hover:bg-stone-800'
-              : 'bg-stone-900 text-white hover:bg-stone-800'
+            : 'bg-stone-900 text-white hover:bg-stone-800'
         }`}
       >
         {buttonText}

@@ -38,10 +38,7 @@ export default function Footer() {
                   Business login
                 </Link>
 
-                <Link href="/contact?topic=premium-listing" className="hover:text-red-600">
-                  Premium listings
-                </Link>
-
+              
                 <Link href="/contact?topic=advertising" className="hover:text-red-600">
                   Advertise with us
                 </Link>

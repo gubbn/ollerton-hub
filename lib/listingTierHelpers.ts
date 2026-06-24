@@ -1,4 +1,4 @@
-export type PaidTier = 'free' | 'featured' | 'premium'
+export type PaidTier = 'free' | 'featured'
 
 export function getThirtyDaysFromNow() {
   const now = new Date()

@@ -28,7 +28,6 @@ type Business = {
   status: string | null
   is_approved: boolean | null
   is_featured: boolean | null
-  is_premium: boolean | null
   listing_type: string | null
   useful_listing_type: string | null
 }
@@ -75,7 +74,6 @@ const businessSelect = `
   status,
   is_approved,
   is_featured,
-  is_premium,
   listing_type,
   useful_listing_type
 `
@@ -112,14 +110,6 @@ function getWordCount(value: string) {
 }
 
 function getListingLimits(business: Business | null) {
-  if (business?.is_premium) {
-    return {
-      description: 250,
-      services: 200,
-      label: 'Premium',
-    }
-  }
-
   if (business?.is_featured) {
     return {
       description: 120,
@@ -386,7 +376,6 @@ export default function BusinessEditPage() {
         owner_id: userId,
         slug: createSlug(form.business_name),
         is_featured: false,
-        is_premium: false,
         created_at: new Date().toISOString(),
       })
       .select(businessSelect)
