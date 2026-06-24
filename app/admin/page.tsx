@@ -43,7 +43,8 @@ function getListingStatus(listing: Business) {
 function isBusinessListing(listing: Business) {
   return (
     listing.listing_type !== 'community' &&
-    listing.listing_type !== 'local_info'
+    listing.listing_type !== 'local_info' &&
+    !listing.useful_listing_type
   )
 }
 
@@ -72,11 +73,47 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
+function getAttentionCountFromBadge(badge?: string) {
+  if (!badge) return 0
+
+  const numberMatch = badge.match(/\d+/)
+  return numberMatch ? Number(numberMatch[0]) : 0
+}
+
+function getAttentionBadgeClasses(badge?: string) {
+  const count = getAttentionCountFromBadge(badge)
+
+  if (count > 0) {
+    return 'bg-red-100 text-red-800 ring-red-200'
+  }
+
+  return 'bg-green-100 text-green-800 ring-green-200'
+}
+
+function getAttentionPanelClasses(count: number) {
+  if (count > 0) {
+    return {
+      section: 'border-red-300 bg-red-50',
+      eyebrow: 'text-red-800',
+      count: 'text-red-700',
+      badgeText: 'Waiting',
+    }
+  }
+
+  return {
+    section: 'border-green-300 bg-green-50',
+    eyebrow: 'text-green-800',
+    count: 'text-green-700',
+    badgeText: 'Clear',
+  }
+}
+
 export default function AdminPage() {
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [error, setError] = useState('')
 
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [stats, setStats] = useState<BusinessStat[]>([])
@@ -85,25 +122,40 @@ export default function AdminPage() {
 
   useEffect(() => {
     loadAdmin()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function loadAdmin() {
     setLoading(true)
+    setError('')
 
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser()
+
+    if (userError) {
+      setError(userError.message)
+      setLoading(false)
+      return
+    }
 
     if (!user) {
       router.push('/login')
       return
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .single()
+
+    if (profileError) {
+      setError(profileError.message)
+      setLoading(false)
+      return
+    }
 
     if (!profile?.is_admin) {
       router.push('/dashboard')
@@ -134,19 +186,27 @@ export default function AdminPage() {
       supabase.from('reviews').select('id, is_approved'),
     ])
 
-    if (businessesResult.data) {
+    if (businessesResult.error) {
+      setError(businessesResult.error.message)
+    } else if (businessesResult.data) {
       setBusinesses(businessesResult.data as Business[])
     }
 
-    if (statsResult.data) {
+    if (statsResult.error) {
+      setError(statsResult.error.message)
+    } else if (statsResult.data) {
       setStats(statsResult.data as BusinessStat[])
     }
 
-    if (contactRequestsResult.data) {
+    if (contactRequestsResult.error) {
+      setError(contactRequestsResult.error.message)
+    } else if (contactRequestsResult.data) {
       setContactRequests(contactRequestsResult.data as ContactRequest[])
     }
 
-    if (reviewsResult.data) {
+    if (reviewsResult.error) {
+      setError(reviewsResult.error.message)
+    } else if (reviewsResult.data) {
       setReviews(reviewsResult.data as Review[])
     }
 
@@ -216,6 +276,10 @@ export default function AdminPage() {
     }
   }, [businesses, stats, contactRequests, reviews])
 
+  const pendingPanel = getAttentionPanelClasses(
+    adminStats.pendingBusinesses.length
+  )
+
   if (loading) {
     return (
       <main className="min-h-screen bg-stone-100 px-6 py-10 text-stone-900">
@@ -257,11 +321,23 @@ export default function AdminPage() {
           </Link>
         </header>
 
-        <section className="rounded-3xl border-2 border-amber-300 bg-amber-50 p-6 shadow-sm">
+        {error ? (
+          <section className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700 ring-1 ring-red-200">
+            {error}
+          </section>
+        ) : null}
+
+        <section
+          className={`rounded-3xl border-2 p-6 shadow-sm ${pendingPanel.section}`}
+        >
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">
-                Needs attention
+              <p
+                className={`text-sm font-semibold uppercase tracking-wide ${pendingPanel.eyebrow}`}
+              >
+                {adminStats.pendingBusinesses.length > 0
+                  ? 'Needs attention'
+                  : 'All clear'}
               </p>
 
               <h2 className="mt-1 text-2xl font-bold text-stone-950">
@@ -275,12 +351,12 @@ export default function AdminPage() {
             </div>
 
             <div className="rounded-2xl bg-white px-5 py-4 text-center shadow-sm">
-              <p className="text-4xl font-bold text-amber-700">
+              <p className={`text-4xl font-bold ${pendingPanel.count}`}>
                 {adminStats.pendingBusinesses.length}
               </p>
 
               <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-                Waiting
+                {pendingPanel.badgeText}
               </p>
             </div>
           </div>
@@ -303,7 +379,7 @@ export default function AdminPage() {
                       </h3>
 
                       <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-800">
+                        <span className="rounded-full bg-red-100 px-3 py-1 font-semibold text-red-800">
                           Pending
                         </span>
 
@@ -345,7 +421,7 @@ export default function AdminPage() {
             <div className="mt-5">
               <Link
                 href="/admin/businesses?status=pending"
-                className="text-sm font-semibold text-amber-800 underline underline-offset-4"
+                className="text-sm font-semibold text-red-800 underline underline-offset-4"
               >
                 View all pending businesses
               </Link>
@@ -508,7 +584,11 @@ function AdminActionCard({
         <h2 className="text-lg font-bold text-stone-950">{title}</h2>
 
         {badge ? (
-          <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${getAttentionBadgeClasses(
+              badge
+            )}`}
+          >
             {badge}
           </span>
         ) : null}

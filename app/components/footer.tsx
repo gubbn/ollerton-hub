@@ -1,6 +1,34 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { supabase } from '@/lib/supabaseClient'
 
 export default function Footer() {
+  const [businessLoginHref, setBusinessLoginHref] = useState('/login')
+
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      setBusinessLoginHref(session ? '/dashboard' : '/login')
+    }
+
+    checkSession()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setBusinessLoginHref(session ? '/dashboard' : '/login')
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
   return (
     <footer className="mt-12 border-t bg-white">
       <div className="mx-auto max-w-6xl px-4 py-8">
@@ -34,11 +62,10 @@ export default function Footer() {
                   Create a business listing
                 </Link>
 
-                <Link href="/login" className="hover:text-red-600">
+                <Link href={businessLoginHref} className="hover:text-red-600">
                   Business login
                 </Link>
 
-              
                 <Link href="/contact?topic=advertising" className="hover:text-red-600">
                   Advertise with us
                 </Link>
