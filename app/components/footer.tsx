@@ -54,23 +54,22 @@ export default function Footer() {
                 For Businesses
               </h4>
 
-              <div className="flex flex-col gap-2 text-sm text-stone-600">
-                <Link
-                  href="/dashboard/business"
-                  className="font-semibold text-red-600 hover:underline"
-                >
-                  Create a business listing
-                </Link>
+<div className="flex flex-col gap-2 text-sm text-stone-600">
+  <Link
+    href="/signup"
+    className="font-semibold text-red-600 hover:underline"
+  >
+    Create a business listing
+  </Link>
 
-                <Link href={businessLoginHref} className="hover:text-red-600">
-                  Business login
-                </Link>
+  <Link href={businessLoginHref} className="hover:text-red-600">
+    Business login
+  </Link>
 
-                <Link href="/contact?topic=advertising" className="hover:text-red-600">
-                  Advertise with us
-                </Link>
-              </div>
-            </div>
+  <Link href="/contact?topic=advertising" className="hover:text-red-600">
+    Advertise with us
+  </Link>
+</div>
 
             <div>
               <h4 className="mb-3 text-sm font-bold text-stone-900">
