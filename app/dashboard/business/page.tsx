@@ -209,8 +209,7 @@ function businessToForm(data: Business): FormState {
   const pendingChanges = getPendingChanges(data)
 
   return {
-    business_name:
-      pendingChanges.business_name ?? data.business_name ?? '',
+    business_name: pendingChanges.business_name ?? data.business_name ?? '',
     description: pendingChanges.description ?? data.description ?? '',
     services: pendingChanges.services ?? data.services ?? '',
     phone: pendingChanges.phone ?? data.phone ?? '',
@@ -218,15 +217,12 @@ function businessToForm(data: Business): FormState {
     website: pendingChanges.website ?? data.website ?? '',
     facebook: pendingChanges.facebook ?? data.facebook ?? '',
     instagram: pendingChanges.instagram ?? data.instagram ?? '',
-    address_line_1:
-      pendingChanges.address_line_1 ?? data.address_line_1 ?? '',
-    address_line_2:
-      pendingChanges.address_line_2 ?? data.address_line_2 ?? '',
+    address_line_1: pendingChanges.address_line_1 ?? data.address_line_1 ?? '',
+    address_line_2: pendingChanges.address_line_2 ?? data.address_line_2 ?? '',
     town: pendingChanges.town ?? data.town ?? '',
     postcode: pendingChanges.postcode ?? data.postcode ?? '',
     service_area: pendingChanges.service_area ?? data.service_area ?? '',
-    opening_times:
-      pendingChanges.opening_times ?? data.opening_times ?? '',
+    opening_times: pendingChanges.opening_times ?? data.opening_times ?? '',
     logo_url: pendingChanges.logo_url ?? data.logo_url ?? '',
     cover_image_url:
       pendingChanges.cover_image_url ?? data.cover_image_url ?? '',
@@ -247,7 +243,9 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
-function normaliseFormForSave(form: FormState): Record<keyof FormState, string | null> {
+function normaliseFormForSave(
+  form: FormState
+): Record<keyof FormState, string | null> {
   return {
     business_name: form.business_name.trim(),
     description: normaliseNullable(form.description),
@@ -566,9 +564,7 @@ export default function BusinessEditPage() {
 
       setBusiness(updatedBusiness)
       setForm(businessToForm(updatedBusiness))
-      setSuccess(
-        'Your listing has been saved and is waiting for approval.'
-      )
+      setSuccess('Your business has been sent to review.')
       setSaving(false)
       return
     }
@@ -606,9 +602,7 @@ export default function BusinessEditPage() {
 
     setBusiness(createdBusiness)
     setForm(businessToForm(createdBusiness))
-    setSuccess(
-      'Your business listing has been created and is now waiting for approval.'
-    )
+    setSuccess('Your business has been sent to review.')
     setSaving(false)
   }
 
@@ -735,12 +729,6 @@ export default function BusinessEditPage() {
         {error ? (
           <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
             {error}
-          </div>
-        ) : null}
-
-        {success ? (
-          <div className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-700">
-            {success}
           </div>
         ) : null}
 
@@ -932,34 +920,42 @@ export default function BusinessEditPage() {
           </section>
 
           <section className="rounded-3xl bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-stone-950">
-                  {isCreateMode ? 'Submit listing' : 'Submit changes'}
-                </h2>
+            <div className="space-y-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-stone-950">
+                    {isCreateMode ? 'Submit listing' : 'Submit changes'}
+                  </h2>
 
-                <p className="mt-1 text-sm text-stone-600">
-                  {isCreateMode
-                    ? 'Your listing will be reviewed before it appears in the public directory.'
-                    : business && isApprovedBusiness(business)
-                      ? 'Your approved listing will stay live while these changes are reviewed.'
-                      : 'Your listing will be reviewed before it appears in the public directory.'}
-                </p>
+                  <p className="mt-1 text-sm text-stone-600">
+                    {isCreateMode
+                      ? 'Your listing will be reviewed before it appears in the public directory.'
+                      : business && isApprovedBusiness(business)
+                        ? 'Your approved listing will stay live while these changes are reviewed.'
+                        : 'Your listing will be reviewed before it appears in the public directory.'}
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-stone-400"
+                >
+                  {saving
+                    ? isCreateMode
+                      ? 'Creating...'
+                      : 'Submitting...'
+                    : isCreateMode
+                      ? 'Create listing'
+                      : 'Submit changes'}
+                </button>
               </div>
 
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-stone-400"
-              >
-                {saving
-                  ? isCreateMode
-                    ? 'Creating...'
-                    : 'Submitting...'
-                  : isCreateMode
-                    ? 'Create listing'
-                    : 'Submit changes'}
-              </button>
+              {success ? (
+                <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200">
+                  {success}
+                </div>
+              ) : null}
             </div>
           </section>
         </form>
