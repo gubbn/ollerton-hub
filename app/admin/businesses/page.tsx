@@ -263,6 +263,7 @@ function AdminBusinessesContent() {
             from the local amenities area.
           </p>
         </header>
+        
 
         {error ? (
           <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">

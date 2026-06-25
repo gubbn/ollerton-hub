@@ -41,6 +41,9 @@ type Business = {
   changes_reviewed_at: string | null
   changes_reviewed_by: string | null
   change_rejection_reason: string | null
+  rejection_reason: string | null
+  rejected_at: string | null
+  rejected_by: string | null
 }
 
 type FormState = {
@@ -94,7 +97,10 @@ const businessSelect = `
   changes_submitted_by,
   changes_reviewed_at,
   changes_reviewed_by,
-  change_rejection_reason
+  change_rejection_reason,
+  rejection_reason,
+  rejected_at,
+  rejected_by
 `
 
 const emptyForm: FormState = {
@@ -476,6 +482,9 @@ export default function BusinessEditPage() {
               changes_reviewed_at: null,
               changes_reviewed_by: null,
               change_rejection_reason: null,
+              rejection_reason: null,
+              rejected_at: null,
+              rejected_by: null,
             })
             .eq('id', business.id)
             .eq('owner_id', userId)
@@ -548,6 +557,9 @@ export default function BusinessEditPage() {
           changes_reviewed_at: null,
           changes_reviewed_by: null,
           change_rejection_reason: null,
+          rejection_reason: null,
+          rejected_at: null,
+          rejected_by: null,
         })
         .eq('id', business.id)
         .eq('owner_id', userId)
@@ -587,6 +599,9 @@ export default function BusinessEditPage() {
         changes_reviewed_at: null,
         changes_reviewed_by: null,
         change_rejection_reason: null,
+        rejection_reason: null,
+        rejected_at: null,
+        rejected_by: null,
         created_at: now,
       })
       .select(businessSelect)
@@ -675,6 +690,27 @@ export default function BusinessEditPage() {
             </div>
           </div>
         </header>
+
+        {business?.status === 'rejected' && business.rejection_reason ? (
+          <section className="rounded-2xl bg-red-50 p-5 shadow-sm ring-1 ring-red-200">
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+              Admin feedback
+            </p>
+
+            <h2 className="mt-1 text-lg font-bold text-red-950">
+              Your listing needs some changes before it can be approved
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-red-900">
+              {business.rejection_reason}
+            </p>
+
+            <p className="mt-3 text-xs leading-5 text-red-800">
+              Please update your listing using the form below and submit it
+              again for review.
+            </p>
+          </section>
+        ) : null}
 
         {business?.has_pending_changes ? (
           <section className="rounded-2xl bg-blue-50 p-5 shadow-sm ring-1 ring-blue-200">
