@@ -27,7 +27,7 @@ export default function ResetPasswordPage() {
     <main className="min-h-screen bg-stone-100 px-6 py-12 text-stone-900">
       <div className="mx-auto max-w-md">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-red-700">Ollerton Connect</h1>
+          <h1 className="text-4xl font-bold text-red-700">Ollerton Hub</h1>
           <p className="mt-2 text-stone-700">
             Reset your password and get back into your account
           </p>
