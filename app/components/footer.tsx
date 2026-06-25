@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 
 export default function Footer() {
   const [businessLoginHref, setBusinessLoginHref] = useState('/login')
+  const [createListingHref, setCreateListingHref] = useState('/login')
 
   useEffect(() => {
     let isMounted = true
@@ -15,12 +16,14 @@ export default function Footer() {
 
       if (!isMounted) return
 
-      if (error) {
+      if (error || !data.session) {
         setBusinessLoginHref('/login')
+        setCreateListingHref('/login')
         return
       }
 
-      setBusinessLoginHref(data.session ? '/dashboard' : '/login')
+      setBusinessLoginHref('/dashboard')
+      setCreateListingHref('/dashboard/business')
     }
 
     checkSession()
@@ -30,7 +33,13 @@ export default function Footer() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return
 
-      setBusinessLoginHref(session ? '/dashboard' : '/login')
+      if (session) {
+        setBusinessLoginHref('/dashboard')
+        setCreateListingHref('/dashboard/business')
+      } else {
+        setBusinessLoginHref('/login')
+        setCreateListingHref('/login')
+      }
     })
 
     return () => {
@@ -66,7 +75,7 @@ export default function Footer() {
 
               <div className="flex flex-col gap-2 text-sm text-stone-600">
                 <Link
-                  href="/signup"
+                  href={createListingHref}
                   className="font-semibold text-red-600 hover:underline"
                 >
                   Create a business listing
