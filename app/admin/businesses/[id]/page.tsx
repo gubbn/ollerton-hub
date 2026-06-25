@@ -59,6 +59,9 @@ type Business = {
   changes_reviewed_at: string | null
   changes_reviewed_by: string | null
   change_rejection_reason: string | null
+  rejection_reason: string | null
+  rejected_at: string | null
+  rejected_by: string | null
 }
 
 type EditableBusinessField =
@@ -124,7 +127,10 @@ const BUSINESS_SELECT = `
   changes_submitted_by,
   changes_reviewed_at,
   changes_reviewed_by,
-  change_rejection_reason
+  change_rejection_reason,
+  rejection_reason,
+  rejected_at,
+  rejected_by
 `
 
 const REVIEWABLE_PENDING_FIELDS = [
@@ -320,6 +326,7 @@ export default function ManageBusinessPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [adminUserId, setAdminUserId] = useState('')
   const [rejectionReason, setRejectionReason] = useState('')
+  const [changeRejectionReason, setChangeRejectionReason] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -418,7 +425,8 @@ export default function ManageBusinessPage() {
     }
 
     setBusiness(loadedBusiness)
-    setRejectionReason('')
+    setRejectionReason(loadedBusiness.rejection_reason || '')
+    setChangeRejectionReason(loadedBusiness.change_rejection_reason || '')
     setLoading(false)
   }
 
@@ -516,6 +524,10 @@ export default function ManageBusinessPage() {
         is_approved: true,
         listing_type: 'business',
         useful_listing_type: null,
+        rejection_reason: null,
+        rejected_at: null,
+        rejected_by: null,
+        change_rejection_reason: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', business.id)
@@ -532,6 +544,8 @@ export default function ManageBusinessPage() {
     }
 
     setBusiness(data as Business)
+    setRejectionReason('')
+    setChangeRejectionReason('')
     setSuccess('Business approved.')
   }
 
@@ -549,17 +563,24 @@ export default function ManageBusinessPage() {
     setSuccess('')
 
     const now = new Date().toISOString()
+    const feedback =
+      cleanTextValue(rejectionReason) ||
+      'Your listing was not approved. Please check your details and submit it again.'
 
     const { data, error: updateError } = await supabase
       .from('businesses')
       .update({
         status: 'rejected',
         is_approved: false,
+        rejection_reason: feedback,
+        rejected_at: now,
+        rejected_by: adminUserId || null,
         pending_changes: {},
         pending_changed_fields: [],
         has_pending_changes: false,
         changes_reviewed_at: now,
         changes_reviewed_by: adminUserId || null,
+        change_rejection_reason: null,
         updated_at: now,
       })
       .eq('id', business.id)
@@ -576,7 +597,9 @@ export default function ManageBusinessPage() {
     }
 
     setBusiness(data as Business)
-    setSuccess('Business rejected.')
+    setRejectionReason(feedback)
+    setChangeRejectionReason('')
+    setSuccess('Business rejected and feedback saved.')
   }
 
   async function updateListingTier(tier: ListingTier) {
@@ -718,7 +741,7 @@ export default function ManageBusinessPage() {
     }
 
     setBusiness(data as Business)
-    setRejectionReason('')
+    setChangeRejectionReason('')
     setSuccess('Pending changes approved and published.')
   }
 
@@ -745,7 +768,7 @@ export default function ManageBusinessPage() {
         has_pending_changes: false,
         changes_reviewed_at: now,
         changes_reviewed_by: adminUserId || null,
-        change_rejection_reason: cleanTextValue(rejectionReason),
+        change_rejection_reason: cleanTextValue(changeRejectionReason),
         updated_at: now,
       })
       .eq('id', business.id)
@@ -762,7 +785,7 @@ export default function ManageBusinessPage() {
     }
 
     setBusiness(data as Business)
-    setRejectionReason('')
+    setChangeRejectionReason('')
     setSuccess('Pending changes rejected. The approved listing was left unchanged.')
   }
 
@@ -920,6 +943,48 @@ export default function ManageBusinessPage() {
               {success}
             </p>
           ) : null}
+
+          <section className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-red-950">
+                  Listing rejection feedback
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-red-800">
+                  Add a clear reason before rejecting a full business listing.
+                  This message will be shown to the business owner on their edit
+                  listing page.
+                </p>
+              </div>
+
+              {business.status === 'rejected' ? (
+                <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800 ring-1 ring-red-200">
+                  Currently rejected
+                </span>
+              ) : null}
+            </div>
+
+            <label className="mt-5 block text-sm font-semibold text-red-950">
+              Feedback for business owner
+              <textarea
+                value={rejectionReason}
+                onChange={(event) => setRejectionReason(event.target.value)}
+                rows={4}
+                className="mt-2 w-full rounded-xl border border-red-200 bg-white p-3 text-sm text-stone-900 outline-none focus:border-red-500"
+                placeholder="Example: Please add a clearer description, include a valid contact email, or remove unsupported claims."
+              />
+            </label>
+
+            {business.rejection_reason ? (
+              <div className="mt-4 rounded-xl bg-white p-4 text-sm text-red-800 ring-1 ring-red-200">
+                <p className="font-semibold">Current saved feedback</p>
+                <p className="mt-1 whitespace-pre-wrap leading-6">
+                  {business.rejection_reason}
+                </p>
+              </div>
+            ) : null}
+          </section>
 
           <section className="mt-8 rounded-2xl border border-stone-200 bg-white p-5">
             <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
@@ -1106,8 +1171,10 @@ export default function ManageBusinessPage() {
               <label className="mt-5 block text-sm font-semibold text-amber-950">
                 Optional rejection note
                 <textarea
-                  value={rejectionReason}
-                  onChange={(event) => setRejectionReason(event.target.value)}
+                  value={changeRejectionReason}
+                  onChange={(event) =>
+                    setChangeRejectionReason(event.target.value)
+                  }
                   rows={3}
                   className="mt-2 w-full rounded-xl border border-amber-300 bg-white p-3 text-sm text-stone-900 outline-none focus:border-amber-500"
                   placeholder="Example: Please remove unsupported claims from the description."
